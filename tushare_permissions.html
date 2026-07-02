@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tushare 数据接口与积分门槛决策辅助工具</title>
+    <!-- Import Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-primary: #0b0f19;
+            --bg-secondary: #131a26;
+            --bg-card: rgba(30, 41, 59, 0.45);
+            --border-card: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            
+            --accent-purple: #818cf8;
+            --accent-purple-glow: rgba(129, 140, 248, 0.15);
+            --accent-blue: #38bdf8;
+            --accent-blue-glow: rgba(56, 189, 248, 0.15);
+            --accent-green: #34d399;
+            --accent-green-glow: rgba(52, 211, 153, 0.15);
+            --accent-orange: #fb923c;
+            --accent-orange-glow: rgba(251, 146, 60, 0.15);
+            --accent-rose: #f43f5e;
+            --accent-rose-glow: rgba(244, 63, 94, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            min-height: 100vh;
+            line-height: 1.6;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(56, 189, 248, 0.05) 0%, transparent 40%);
+            background-attachment: fixed;
+            padding-bottom: 50px;
+        }
+
+        header {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 24px 20px 24px;
+            border-bottom: 1px solid var(--border-card);
+        }
+
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .header-title h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+            letter-spacing: -0.025em;
+        }
+
+        .header-title p {
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+            max-width: 800px;
+        }
+
+        .stats-badge {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-card);
+            padding: 8px 16px;
+            border-radius: 99px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--accent-blue);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .main-content {
+            max-width: 1400px;
+            margin: 30px auto 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Stats Tabs Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            padding: 14px 10px;
+            text-align: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: var(--text-muted);
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .stat-card.active {
+            border-color: var(--accent-purple);
+            background: rgba(49, 46, 129, 0.25);
+        }
+
+        .stat-card.active::before {
+            background: var(--accent-purple);
+        }
+
+        .stat-card.tier-all::before { background: var(--accent-blue); }
+        .stat-card.tier-1000::before { background: var(--accent-green); }
+        .stat-card.tier-2000::before { background: var(--accent-blue); }
+        .stat-card.tier-3000::before { background: var(--accent-purple); }
+        .stat-card.tier-4000::before { background: #a855f7; }
+        .stat-card.tier-5000::before { background: #d946ef; }
+        .stat-card.tier-6000::before { background: var(--accent-orange); }
+        .stat-card.tier-7000::before { background: #f59e0b; }
+        .stat-card.tier-8000::before { background: #f43f5e; }
+        .stat-card.tier-gt-8000::before { background: var(--accent-rose); }
+        .stat-card.tier-separate::before { background: #e2e8f0; }
+
+        .stat-card .value {
+            font-size: 1.6rem;
+            font-weight: 800;
+            margin-bottom: 2px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .stat-card .label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .stat-card .desc {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+        }
+
+        /* Table Area container */
+        .dashboard-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .tier-title-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .tier-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .tier-description {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .search-box {
+            position: relative;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .search-input {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-card);
+            padding: 12px 16px 12px 42px;
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 0 3px var(--accent-purple-glow);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        /* Table Design */
+        .table-responsive {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid var(--border-card);
+            margin-bottom: 25px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+
+        th {
+            background: rgba(15, 23, 42, 0.8);
+            color: var(--text-primary);
+            font-weight: 600;
+            padding: 14px 16px;
+            border-bottom: 2px solid var(--border-card);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-card);
+            color: var(--text-secondary);
+            vertical-align: middle;
+        }
+
+        tr {
+            transition: background-color 0.2s ease;
+        }
+
+        tr:hover {
+            background-color: rgba(255, 255, 255, 0.015);
+        }
+
+        /* Highlight classes */
+        tr.new-row {
+            background-color: rgba(99, 102, 241, 0.07) !important;
+            border-left: 4px solid var(--accent-purple);
+        }
+
+        tr.new-row:hover {
+            background-color: rgba(99, 102, 241, 0.1) !important;
+        }
+
+        .code-tag {
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+            padding: 3px 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-weight: 500;
+            font-size: 0.8rem;
+            display: inline-block;
+        }
+
+        .title-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .points-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .badge-green { background: var(--accent-green-glow); color: var(--accent-green); border: 1px solid rgba(52, 211, 153, 0.2); }
+        .badge-blue { background: var(--accent-blue-glow); color: var(--accent-blue); border: 1px solid rgba(56, 189, 248, 0.2); }
+        .badge-purple { background: var(--accent-purple-glow); color: var(--accent-purple); border: 1px solid rgba(129, 140, 248, 0.2); }
+        .badge-orange { background: var(--accent-orange-glow); color: var(--accent-orange); border: 1px solid rgba(251, 146, 60, 0.2); }
+        .badge-rose { background: var(--accent-rose-glow); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.2); }
+        .badge-purple-dark { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.2); }
+
+        .new-badge {
+            background: var(--accent-purple);
+            color: #0b0f19;
+            font-size: 0.65rem;
+            font-weight: 800;
+            padding: 1px 4px;
+            border-radius: 3px;
+            margin-left: 6px;
+            text-transform: uppercase;
+            animation: pulse 2.5s infinite;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
+        }
+
+        .limit-text {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            line-height: 1.3;
+        }
+
+        .link-btn {
+            display: inline-flex;
+            align-items: center;
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            background: rgba(56, 189, 248, 0.06);
+            border: 1px solid rgba(56, 189, 248, 0.12);
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        .link-btn:hover {
+            background: var(--accent-blue);
+            color: #0b0f19;
+            box-shadow: 0 4px 8px rgba(56, 189, 248, 0.2);
+            border-color: var(--accent-blue);
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        /* Decision Helper Panel */
+        .decision-panel {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.25);
+            border-radius: 20px;
+            padding: 24px;
+            margin-bottom: 25px;
+            backdrop-filter: blur(10px);
+        }
+
+        .decision-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #a5b4fc;
+        }
+
+        .decision-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .legend-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-top: 15px;
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-card);
+            padding-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-box {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+
+        /* Accordion Style Category Headers */
+        .cat-group-heading {
+            margin: 15px 0 10px 0;
+            padding: 12px 18px;
+            background: rgba(99, 102, 241, 0.05);
+            border-left: 4px solid var(--accent-purple);
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            border-radius: 0 8px 8px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+            border-left-width: 4px;
+        }
+
+        .cat-group-heading:hover {
+            background: rgba(99, 102, 241, 0.12);
+            border-left-color: var(--accent-blue);
+        }
+
+        .cat-group-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .cat-group-count {
+            font-size: 0.75rem;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 2px 8px;
+            border-radius: 99px;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .new-count-badge {
+            background: rgba(52, 211, 153, 0.12);
+            color: var(--accent-green);
+            border: 1px solid rgba(52, 211, 153, 0.25);
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 99px;
+            display: inline-flex;
+            align-items: center;
+            box-shadow: 0 0 10px rgba(52, 211, 153, 0.06);
+            letter-spacing: 0.02em;
+        }
+
+        .collapse-icon {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            transition: transform 0.2s ease;
+            font-family: 'Courier New', monospace;
+            font-weight: 900;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-container">
+            <div class="header-title">
+                <h1>Tushare 数据接口与积分门槛决策辅助工具</h1>
+                <p>完全对齐官网侧边栏分类结构与每 1000 积分区间累计整理。点击分类栏可以展开/收起该分类下的接口列表。</p>
+            </div>
+            <div class="stats-badge">
+                <span>⚡ 已加载 298 条权限记录 (含多门槛拆分)</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-content">
+
+        <!-- Decision Helper Panel -->
+        <div class="decision-panel">
+            <div class="decision-title">💡 积分区间使用指南</div>
+            <p class="decision-desc">
+                当您选择某一积分档位时，您不仅能调用该档位的接口，还可以调用<strong>所有更低积分要求</strong>的接口。
+                为了方便您对比，当您切换至较高积分档位时，<strong>相较于前一个档位新增的接口行会被高亮显示，并附带“新增”标签。</strong>
+                分类与官网侧边栏（主分类与子分类）完全对齐，默认均呈折叠状态，点击分类栏可展开；若输入文字进行搜索，系统会自动展开匹配的分类。
+            </p>
+            <div class="legend-container">
+                <span style="font-weight: 600; color: var(--text-primary);">图例说明：</span>
+                <div class="legend-item">
+                    <div class="legend-box" style="background-color: rgba(99, 102, 241, 0.1); border-left: 3px solid var(--accent-purple);"></div>
+                    <span>紫色高亮行：该积分档位下<strong>新增解锁</strong>的接口</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box" style="background-color: transparent; border: 1px solid var(--border-card);"></div>
+                    <span>常规行：在更低积分档已解锁，在此档位仍可继续调用的接口</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats / Tabs Grid -->
+        <div class="stats-grid" id="tabs-grid">
+            <div class="stat-card tier-all active" onclick="selectTier('tier_all', this)">
+                <div class="value">298</div>
+                <div class="label">ALL 全部</div>
+                <div class="desc">官方侧边栏分类</div>
+            </div>
+            <div class="stat-card tier-1000" onclick="selectTier('tier_1000', this)">
+                <div class="value">46</div>
+                <div class="label">1000 积分及以下</div>
+                <div class="desc">累计可用</div>
+            </div>
+            <div class="stat-card tier-2000" onclick="selectTier('tier_2000', this)">
+                <div class="value">127</div>
+                <div class="label">2000 积分及以下</div>
+                <div class="desc">累计可用</div>
+            </div>
+            <div class="stat-card tier-3000" onclick="selectTier('tier_3000', this)">
+                <div class="value">129</div>
+                <div class="label">3000 积分及以下</div>
+                <div class="desc">累计可用</div>
+            </div>
+            <div class="stat-card tier-4000" onclick="selectTier('tier_4000', this)">
+                <div class="value">129</div>
+                <div class="label">4000 积分及以下</div>
+                <div class="desc">累计可用</div>
+            </div>
+            <div class="stat-card tier-5000" onclick="selectTier('tier_5000', this)">
+                <div class="value">193</div>
+                <div class="label">5000 积分及以下</div>
+                <div class="desc">累计可用</div>
+            </div>
+            <div class="stat-card tier-6000" onclick="selectTier('tier_6000', this)">
+                <div class="value">217</div>
+                <div class="label">6000 积分及以下</div>
+                <div class="desc">累计可用</div>
+            </div>
+            <div class="stat-card tier-7000" onclick="selectTier('tier_7000', this)">
+                <div class="value">217</div>
+                <div class="label">7000 积分及以下</div>
+                <div class="desc">累计可用</div>
+            </div>
+            <div class="stat-card tier-8000" onclick="selectTier('tier_8000', this)">
+                <div class="value">238</div>
+                <div class="label">8000 积分及以下</div>
+                <div class="desc">累计可用</div>
+            </div>
+            <div class="stat-card tier-gt-8000" onclick="selectTier('tier_gt_8000', this)">
+                <div class="value">245</div>
+                <div class="label">>8000 积分</div>
+                <div class="desc">累计可用</div>
+            </div>
+            <div class="stat-card tier-separate" onclick="selectTier('tier_separate', this)">
+                <div class="value">53</div>
+                <div class="label">单独授权</div>
+                <div class="desc">独立收费/待查</div>
+            </div>
+        </div>
+
+        <!-- Dashboard Table Area -->
+        <div class="dashboard-container">
+            <div class="control-row">
+                <div class="tier-title-container">
+                    <span class="tier-title" id="current-tier-title">ALL 全部接口</span>
+                    <span class="tier-description" id="current-tier-desc">包括所有的数据接口，按官网分类层级展示，方便全局浏览与架构整理。</span>
+                </div>
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" class="search-input" id="search-input" placeholder="搜索接口类型、代码、名称..." oninput="handleSearch()">
+                </div>
+            </div>
+
+            <!-- Dynamic Table Container -->
+            <div id="table-container">
+                <!-- Javascript will render table here -->
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Embed raw expanded items
+        const rawExpandedItems = [{"id": "j1_3", "category": "股票数据 / 基础数据", "title": "股票基础信息", "interfaceName": "stock_basic", "permissionText": "权限：2000积分起，每分钟请求50次。此接口是基础信息，调取一次就可以拉取完，建议保存倒本地存储后使用", "limit": "每次最多返回6000行数据（覆盖全市场A股，会随股票总数增长而增加）", "desc": "获取基础信息数据，包括股票代码、名称、上市日期、退市日期等", "points": 2000, "href": "/document/2?doc_id=25", "is_separate": false}, {"id": "j1_4", "category": "股票数据 / 基础数据", "title": "股本情况（盘前）", "interfaceName": "stk_premarket", "permissionText": "权限：与积分无关，可以在线开通权限。", "limit": "单次最大8000条数据，可循环提取", "desc": "每日开盘前获取当日股票的股本情况，包括总股本和流通股本，涨跌停价格等。", "points": null, "href": "/document/2?doc_id=329", "is_separate": true}, {"id": "j1_5", "category": "股票数据 / 基础数据", "title": "交易日历", "interfaceName": "trade_cal", "permissionText": "积分：需2000积分", "limit": "", "desc": "获取各大交易所交易日历数据,默认提取的是上交所积分：需2000积分", "points": 2000, "href": "/document/2?doc_id=26", "is_separate": false}, {"id": "j1_6", "category": "股票数据 / 基础数据", "title": "ST股票列表", "interfaceName": "stock_st", "permissionText": "权限：3000积分起提示：每天上午9:20更新，单次请求最大返回1000行数据，可循环提取,本接口数据从20160101开始,太早历史无法补齐", "limit": "", "desc": "获取ST股票列表，可根据交易日期获取历史上每天的ST列表权限：3000积分起提示：每天上午9:20更新，单次请求最大返回1000行数据，可循环提取,本接口数据从20160101开始,太早历史无法补齐", "points": 3000, "href": "/document/2?doc_id=397", "is_separate": false}, {"id": "j1_7", "category": "股票数据 / 基础数据", "title": "ST风险警示板股票", "interfaceName": "st", "permissionText": "积分：6000积分可提取数据，具体请参阅积分获取办法", "limit": "单次最大1000，可根据股票代码循环获取历史数据", "desc": "ST风险警示板股票列表", "points": 6000, "href": "/document/2?doc_id=423", "is_separate": false}, {"id": "j1_8", "category": "股票数据 / 基础数据", "title": "沪深港通股票列表", "interfaceName": "stock_hsgt", "permissionText": "权限：3000积分起提示：每天上午9:20更新，单次请求最大返回2000行数据，可根据类型循环提取,本接口数据从20250812开始", "limit": "", "desc": "获取沪深港通股票列表权限：3000积分起提示：每天上午9:20更新，单次请求最大返回2000行数据，可根据类型循环提取,本接口数据从20250812开始", "points": 3000, "href": "/document/2?doc_id=398", "is_separate": false}, {"id": "j1_9", "category": "股票数据 / 基础数据", "title": "股票曾用名", "interfaceName": "namechange", "permissionText": "", "limit": "", "desc": "历史名称变更记录", "points": null, "href": "/document/2?doc_id=100", "is_separate": true}, {"id": "j1_10", "category": "股票数据 / 基础数据", "title": "上市公司基本信息", "interfaceName": "stock_company", "permissionText": "积分：用户需要至少120积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取上市公司基础信息，单次提取4500条，可以根据交易所分批提取积分：用户需要至少120积分才可以调取，具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=112", "is_separate": false}, {"id": "j1_11", "category": "股票数据 / 基础数据", "title": "上市公司管理层", "interfaceName": "stk_managers", "permissionText": "积分：用户需要2000积分才可以调取，5000积分以上频次相对较高，具体请参阅积分获取办法", "limit": "", "desc": "获取上市公司管理层积分：用户需要2000积分才可以调取，5000积分以上频次相对较高，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=193", "is_separate": false}, {"id": "j1_11", "category": "股票数据 / 基础数据", "title": "上市公司管理层", "interfaceName": "stk_managers", "permissionText": "积分：用户需要2000积分才可以调取，5000积分以上频次相对较高，具体请参阅积分获取办法", "limit": "", "desc": "获取上市公司管理层积分：用户需要2000积分才可以调取，5000积分以上频次相对较高，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=193", "is_separate": false}, {"id": "j1_12", "category": "股票数据 / 基础数据", "title": "管理层薪酬和持股", "interfaceName": "stk_rewards", "permissionText": "积分：用户需要2000积分才可以调取，5000积分以上频次相对较高，具体请参阅积分获取办法", "limit": "", "desc": "获取上市公司管理层薪酬和持股积分：用户需要2000积分才可以调取，5000积分以上频次相对较高，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=194", "is_separate": false}, {"id": "j1_12", "category": "股票数据 / 基础数据", "title": "管理层薪酬和持股", "interfaceName": "stk_rewards", "permissionText": "积分：用户需要2000积分才可以调取，5000积分以上频次相对较高，具体请参阅积分获取办法", "limit": "", "desc": "获取上市公司管理层薪酬和持股积分：用户需要2000积分才可以调取，5000积分以上频次相对较高，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=194", "is_separate": false}, {"id": "j1_13", "category": "股票数据 / 基础数据", "title": "北交所新旧代码对照表", "interfaceName": "bse_mapping", "permissionText": "积分：2000积分即可调取", "limit": "单次最大1000条（本接口总数据量300以内）", "desc": "获取北交所股票代码变更后新旧代码映射表数据", "points": 2000, "href": "/document/2?doc_id=375", "is_separate": false}, {"id": "j1_14", "category": "股票数据 / 基础数据", "title": "IPO新股列表", "interfaceName": "new_share", "permissionText": "积分：用户需要至少120积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大2000条，总量不限制积分：用户需要至少120积分才可以调取，具体请参阅积分获取办法", "desc": "获取新股上市列表数据限量：单次最大2000条，总量不限制积分：用户需要至少120积分才可以调取，具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=123", "is_separate": false}, {"id": "j1_15", "category": "股票数据 / 基础数据", "title": "股票历史列表（历史每天股票列表）", "interfaceName": "bak_basic", "permissionText": "权限需要5000积分。", "limit": "单次最大7000条，可以根据日期参数循环获取历史，正式权限需要5000积分。", "desc": "获取备用基础列表，数据从2016年开始限量：单次最大7000条，可以根据日期参数循环获取历史，正式权限需要5000积分。", "points": 5000, "href": "/document/2?doc_id=262", "is_separate": false}, {"id": "j1_17", "category": "股票数据 / 行情数据", "title": "A股日线行情", "interfaceName": "daily", "permissionText": "调取说明：基础积分每分钟内可调取500次，每次6000条数据，一次请求相当于提取一个股票23年历史", "limit": "", "desc": "交易日每天15点～16点之间入库。本接口是未复权行情，停牌期间不提供数据", "points": 120, "href": "/document/2?doc_id=27", "is_separate": false}, {"id": "j1_18", "category": "股票数据 / 行情数据", "title": "A股实时日线", "interfaceName": "rt_k", "permissionText": "积分：本接口是单独开权限的数据，单独申请权限请参考权限列表，可以在线开通权限。", "limit": "单次最大可提取6000条数据，等同于一次提取全市场", "desc": "获取实时日k线行情，支持按股票代码及股票代码通配符一次性提取全部股票实时日k线行情", "points": null, "href": "/document/2?doc_id=372", "is_separate": true}, {"id": "j1_19", "category": "股票数据 / 行情数据", "title": "股票历史分钟行情", "interfaceName": "stk_mins", "permissionText": "权限：需单独开权限，正式权限请参阅 权限说明  ，可以在线开通分钟权限。", "limit": "单次最大8000行数据，可以通过股票代码和时间循环获取，本接口可以提供超过10年历史分钟数据", "desc": "获取A股分钟数据，支持1min/5min/15min/30min/60min行情，提供Python SDK和 http Restful API两种方式", "points": null, "href": "/document/2?doc_id=370", "is_separate": true}, {"id": "j1_20", "category": "股票数据 / 行情数据", "title": "A股实时分钟", "interfaceName": "rt_min", "permissionText": "权限：正式权限请参阅 权限说明", "limit": "单次最大1000行数据，可以通过股票代码提取数据，支持逗号分隔的多个代码同时提取", "desc": "获取全A股票实时分钟数据，包括1~60min", "points": null, "href": "/document/2?doc_id=374", "is_separate": true}, {"id": "j1_21", "category": "股票数据 / 行情数据", "title": "A股实时分钟-日累计", "interfaceName": "rt_min_daily", "permissionText": "权限：开通了实时分钟权限自动获得本接口权限", "limit": "", "desc": "获取A股当日盘中历史分钟数据，可以提取单只股票当日开盘以来的所有分钟数据", "points": null, "href": "/document/2?doc_id=457", "is_separate": true}, {"id": "j1_22", "category": "股票数据 / 行情数据", "title": "周线行情", "interfaceName": "weekly", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大6000行，可使用交易日期循环提取，总量不限制积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "desc": "获取A股周线行情，本接口每周最后一个交易日更新，如需要使用每天更新的周线数据，请使用日度更新的周线行情接口。限量：单次最大6000行，可使用交易日期循环提取，总量不限制积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=144", "is_separate": false}, {"id": "j1_23", "category": "股票数据 / 行情数据", "title": "月线行情", "interfaceName": "monthly", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大4500行，总量不限制积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "desc": "获取A股月线数据限量：单次最大4500行，总量不限制积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=145", "is_separate": false}, {"id": "j1_24", "category": "股票数据 / 行情数据", "title": "A股复权行情", "interfaceName": "pro_bar", "permissionText": "", "limit": "", "desc": "", "points": null, "href": "/document/2?doc_id=146", "is_separate": true}, {"id": "j1_25", "category": "股票数据 / 行情数据", "title": "股票周/月线行情(每日更新)", "interfaceName": "stk_weekly_monthly", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大6000,可使用交易日期循环提取，总量不限制积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "desc": "股票周/月线行情(每日更新)限量：单次最大6000,可使用交易日期循环提取，总量不限制积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=336", "is_separate": false}, {"id": "j1_26", "category": "股票数据 / 行情数据", "title": "股票周/月线行情(复权--每日更新)", "interfaceName": "stk_week_month_adj", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大6000,可使用交易日期循环提取，总量不限制积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "desc": "股票周/月线行情(复权--每日更新)限量：单次最大6000,可使用交易日期循环提取，总量不限制积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=365", "is_separate": false}, {"id": "j1_27", "category": "股票数据 / 行情数据", "title": "复权因子", "interfaceName": "adj_factor", "permissionText": "积分要求：2000积分起，5000以上可高频调取", "limit": "", "desc": "本接口由Tushare自行生产，获取股票复权因子，可提取单只股票全部历史复权因子，也可以提取单日全部股票的复权因子。积分要求：2000积分起，5000以上可高频调取", "points": 2000, "href": "/document/2?doc_id=28", "is_separate": false}, {"id": "j1_28", "category": "股票数据 / 行情数据", "title": "每日指标", "interfaceName": "daily_basic", "permissionText": "积分：至少2000积分才可以调取，5000积分无总量限制，具体请参阅积分获取办法", "limit": "", "desc": "获取全部股票每日重要的基本面指标，可用于选股分析、报表展示等。单次请求最大返回6000条数据，可按日线循环提取全部历史。", "points": 2000, "href": "/document/2?doc_id=32", "is_separate": false}, {"id": "j1_28", "category": "股票数据 / 行情数据", "title": "每日指标", "interfaceName": "daily_basic", "permissionText": "积分：至少2000积分才可以调取，5000积分无总量限制，具体请参阅积分获取办法", "limit": "", "desc": "获取全部股票每日重要的基本面指标，可用于选股分析、报表展示等。单次请求最大返回6000条数据，可按日线循环提取全部历史。", "points": 5000, "href": "/document/2?doc_id=32", "is_separate": false}, {"id": "j1_29", "category": "股票数据 / 行情数据", "title": "通用行情接口", "interfaceName": "pro_bar", "permissionText": "积分要求，具体请参阅每类数据的文档说明。", "limit": "", "desc": "目前整合了股票（未复权、前复权、后复权）、指数、ETF基金、期货、期权的行情数据，未来还将整合包括外汇在内的所有交易行情数据，同时提供分钟数据。不同数据对应不同的积分要求，具体请参阅每类数据的文档说明。", "points": 600, "href": "/document/2?doc_id=109", "is_separate": false}, {"id": "j1_30", "category": "股票数据 / 行情数据", "title": "每日涨跌停价格", "interfaceName": "stk_limit", "permissionText": "积分：用户积2000积分可调取，单位分钟有流控，积分越高流量越大，请自行提高积分，具体请参阅积分获取办法", "limit": "单次最多提取5800条记录，可循环调取，总量不限制积分：用户积2000积分可调取，单位分钟有流控，积分越高流量越大，请自行提高积分，具体请参阅积分获取办法", "desc": "获取全市场（包含A/B股和基金）每日涨跌停价格，包括涨停价格，跌停价格等，每个交易日8点40左右更新当日股票涨跌停价格。限量：单次最多提取5800条记录，可循环调取，总量不限制积分：用户积2000积分可调取，单位分钟有流控，积分越高流量越大，请自行提高积分，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=183", "is_separate": false}, {"id": "j1_31", "category": "股票数据 / 行情数据", "title": "每日停复牌信息", "interfaceName": "suspend_d", "permissionText": "", "limit": "", "desc": "按日期方式获取股票每日停复牌信息", "points": null, "href": "/document/2?doc_id=214", "is_separate": true}, {"id": "j1_32", "category": "股票数据 / 行情数据", "title": "沪深股通十大成交股", "interfaceName": "hsgt_top10", "permissionText": "", "limit": "", "desc": "获取沪股通、深股通每日前十大成交详细数据，每天18~20点之间完成当日更新", "points": null, "href": "/document/2?doc_id=48", "is_separate": true}, {"id": "j1_33", "category": "股票数据 / 行情数据", "title": "港股通十大成交股", "interfaceName": "ggt_top10", "permissionText": "", "limit": "", "desc": "获取港股通每日成交数据，其中包括沪市、深市详细数据，每天18~20点之间完成当日更新", "points": null, "href": "/document/2?doc_id=49", "is_separate": true}, {"id": "j1_34", "category": "股票数据 / 行情数据", "title": "港股通每日成交统计", "interfaceName": "ggt_daily", "permissionText": "积分：用户积2000积分可调取，5000积分以上频次相对较高，请自行提高积分，具体请参阅积分获取办法", "limit": "单次最大1000，总量数据不限制积分：用户积2000积分可调取，5000积分以上频次相对较高，请自行提高积分，具体请参阅积分获取办法", "desc": "获取港股通每日成交信息，数据从2014年开始限量：单次最大1000，总量数据不限制积分：用户积2000积分可调取，5000积分以上频次相对较高，请自行提高积分，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=196", "is_separate": false}, {"id": "j1_34", "category": "股票数据 / 行情数据", "title": "港股通每日成交统计", "interfaceName": "ggt_daily", "permissionText": "积分：用户积2000积分可调取，5000积分以上频次相对较高，请自行提高积分，具体请参阅积分获取办法", "limit": "单次最大1000，总量数据不限制积分：用户积2000积分可调取，5000积分以上频次相对较高，请自行提高积分，具体请参阅积分获取办法", "desc": "获取港股通每日成交信息，数据从2014年开始限量：单次最大1000，总量数据不限制积分：用户积2000积分可调取，5000积分以上频次相对较高，请自行提高积分，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=196", "is_separate": false}, {"id": "j1_35", "category": "股票数据 / 行情数据", "title": "备用行情", "interfaceName": "bak_daily", "permissionText": "权限需要5000积分。", "limit": "单次最大7000行数据，可以根据日期参数循环获取，正式权限需要5000积分。", "desc": "获取备用行情，包括特定的行情指标(数据从2017年中左右开始，早期有几天数据缺失，近期正常)限量：单次最大7000行数据，可以根据日期参数循环获取，正式权限需要5000积分。", "points": 5000, "href": "/document/2?doc_id=255", "is_separate": false}, {"id": "j1_37", "category": "股票数据 / 财务数据", "title": "利润表", "interfaceName": "income", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取上市公司财务利润表数据", "points": 2000, "href": "/document/2?doc_id=33", "is_separate": false}, {"id": "j1_38", "category": "股票数据 / 财务数据", "title": "资产负债表", "interfaceName": "balancesheet", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取上市公司资产负债表", "points": 2000, "href": "/document/2?doc_id=36", "is_separate": false}, {"id": "j1_39", "category": "股票数据 / 财务数据", "title": "现金流量表", "interfaceName": "cashflow", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取上市公司现金流量表", "points": 2000, "href": "/document/2?doc_id=44", "is_separate": false}, {"id": "j1_40", "category": "股票数据 / 财务数据", "title": "业绩预告", "interfaceName": "forecast", "permissionText": "权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法提示：当前接口只能按单只股票获取其历史数据，如果需要获取某一季度全部上市公司数据，请使用forecast_vip接口（参数一致），需积攒5000积分。", "limit": "", "desc": "获取业绩预告数据权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法提示：当前接口只能按单只股票获取其历史数据，如果需要获取某一季度全部上市公司数据，请使用forecast_vip接口（参数一致），需积攒5000积分。", "points": 2000, "href": "/document/2?doc_id=45", "is_separate": false}, {"id": "j1_40", "category": "股票数据 / 财务数据", "title": "业绩预告", "interfaceName": "forecast", "permissionText": "权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法提示：当前接口只能按单只股票获取其历史数据，如果需要获取某一季度全部上市公司数据，请使用forecast_vip接口（参数一致），需积攒5000积分。", "limit": "", "desc": "获取业绩预告数据权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法提示：当前接口只能按单只股票获取其历史数据，如果需要获取某一季度全部上市公司数据，请使用forecast_vip接口（参数一致），需积攒5000积分。", "points": 5000, "href": "/document/2?doc_id=45", "is_separate": false}, {"id": "j1_41", "category": "股票数据 / 财务数据", "title": "业绩快报", "interfaceName": "express", "permissionText": "权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法提示：当前接口只能按单只股票获取其历史数据，如果需要获取某一季度全部上市公司数据，请使用express_vip接口（参数一致），需积攒5000积分。", "limit": "", "desc": "获取上市公司业绩快报权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法提示：当前接口只能按单只股票获取其历史数据，如果需要获取某一季度全部上市公司数据，请使用express_vip接口（参数一致），需积攒5000积分。", "points": 2000, "href": "/document/2?doc_id=46", "is_separate": false}, {"id": "j1_41", "category": "股票数据 / 财务数据", "title": "业绩快报", "interfaceName": "express", "permissionText": "权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法提示：当前接口只能按单只股票获取其历史数据，如果需要获取某一季度全部上市公司数据，请使用express_vip接口（参数一致），需积攒5000积分。", "limit": "", "desc": "获取上市公司业绩快报权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法提示：当前接口只能按单只股票获取其历史数据，如果需要获取某一季度全部上市公司数据，请使用express_vip接口（参数一致），需积攒5000积分。", "points": 5000, "href": "/document/2?doc_id=46", "is_separate": false}, {"id": "j1_42", "category": "股票数据 / 财务数据", "title": "分红送股", "interfaceName": "dividend", "permissionText": "权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "分红送股数据权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=103", "is_separate": false}, {"id": "j1_43", "category": "股票数据 / 财务数据", "title": "财务指标数据", "interfaceName": "fina_indicator", "permissionText": "权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法提示：当前接口只能按单只股票获取其历史数据，如果需要获取某一季度全部上市公司数据，请使用fina_indicator_vip接口（参数一致），需积攒5000积分。", "limit": "", "desc": "获取上市公司财务指标数据，为避免服务器压力，现阶段每次请求最多返回100条记录，可通过设置日期多次请求获取更多数据。权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法提示：当前接口只能按单只股票获取其历史数据，如果需要获取某一季度全部上市公司数据，请使用fina_indicator_vip接口（参数一致），需积攒5000积分。", "points": 2000, "href": "/document/2?doc_id=79", "is_separate": false}, {"id": "j1_43", "category": "股票数据 / 财务数据", "title": "财务指标数据", "interfaceName": "fina_indicator", "permissionText": "权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法提示：当前接口只能按单只股票获取其历史数据，如果需要获取某一季度全部上市公司数据，请使用fina_indicator_vip接口（参数一致），需积攒5000积分。", "limit": "", "desc": "获取上市公司财务指标数据，为避免服务器压力，现阶段每次请求最多返回100条记录，可通过设置日期多次请求获取更多数据。权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法提示：当前接口只能按单只股票获取其历史数据，如果需要获取某一季度全部上市公司数据，请使用fina_indicator_vip接口（参数一致），需积攒5000积分。", "points": 5000, "href": "/document/2?doc_id=79", "is_separate": false}, {"id": "j1_44", "category": "股票数据 / 财务数据", "title": "财务审计意见", "interfaceName": "fina_audit", "permissionText": "权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取上市公司定期财务审计意见数据", "points": 2000, "href": "/document/2?doc_id=80", "is_separate": false}, {"id": "j1_45", "category": "股票数据 / 财务数据", "title": "主营业务构成", "interfaceName": "fina_mainbz", "permissionText": "权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法  ，单次最大提取100行，总量不限制，可循环获取。", "limit": "", "desc": "获得上市公司主营业务构成，分地区和产品两种方式", "points": 2000, "href": "/document/2?doc_id=81", "is_separate": false}, {"id": "j1_46", "category": "股票数据 / 财务数据", "title": "财报披露计划", "interfaceName": "disclosure_date", "permissionText": "积分：用户需要至少2000积分才可以调取，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大6000，总量不限制", "desc": "获取财报披露计划日期", "points": 2000, "href": "/document/2?doc_id=162", "is_separate": false}, {"id": "j1_48", "category": "股票数据 / 参考数据", "title": "个股异常波动", "interfaceName": "stk_shock", "permissionText": "积分：需要6000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大1000条，可根据代码或日期循环提取", "desc": "根据证券交易所交易规则的有关规定，交易所每日发布股票交易异常波动情况", "points": 6000, "href": "/document/2?doc_id=451", "is_separate": false}, {"id": "j1_49", "category": "股票数据 / 参考数据", "title": "个股严重异常波动", "interfaceName": "stk_high_shock", "permissionText": "积分：需要6000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大1000条，可根据代码或日期循环提取", "desc": "根据证券交易所交易规则的有关规定，交易所每日发布股票交易严重异常波动情况", "points": 6000, "href": "/document/2?doc_id=452", "is_separate": false}, {"id": "j1_50", "category": "股票数据 / 参考数据", "title": "交易所重点提示证券", "interfaceName": "stk_alert", "permissionText": "积分：需要6000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大1000条，可根据代码或日期循环提取", "desc": "根据证券交易所交易规则的有关规定，交易所每日发布重点提示证券", "points": 6000, "href": "/document/2?doc_id=453", "is_separate": false}, {"id": "j1_51", "category": "股票数据 / 参考数据", "title": "前十大股东", "interfaceName": "top10_holders", "permissionText": "积分：需2000积分以上才可以调取本接口，5000积分以上频次会更高", "limit": "", "desc": "获取上市公司前十大股东数据，包括持有数量和比例等信息积分：需2000积分以上才可以调取本接口，5000积分以上频次会更高", "points": 2000, "href": "/document/2?doc_id=61", "is_separate": false}, {"id": "j1_51", "category": "股票数据 / 参考数据", "title": "前十大股东", "interfaceName": "top10_holders", "permissionText": "积分：需2000积分以上才可以调取本接口，5000积分以上频次会更高", "limit": "", "desc": "获取上市公司前十大股东数据，包括持有数量和比例等信息积分：需2000积分以上才可以调取本接口，5000积分以上频次会更高", "points": 5000, "href": "/document/2?doc_id=61", "is_separate": false}, {"id": "j1_52", "category": "股票数据 / 参考数据", "title": "前十大流通股东", "interfaceName": "top10_floatholders", "permissionText": "积分：需2000积分以上才可以调取本接口，5000积分以上频次会更高", "limit": "", "desc": "获取上市公司前十大流通股东数据积分：需2000积分以上才可以调取本接口，5000积分以上频次会更高", "points": 2000, "href": "/document/2?doc_id=62", "is_separate": false}, {"id": "j1_52", "category": "股票数据 / 参考数据", "title": "前十大流通股东", "interfaceName": "top10_floatholders", "permissionText": "积分：需2000积分以上才可以调取本接口，5000积分以上频次会更高", "limit": "", "desc": "获取上市公司前十大流通股东数据积分：需2000积分以上才可以调取本接口，5000积分以上频次会更高", "points": 5000, "href": "/document/2?doc_id=62", "is_separate": false}, {"id": "j1_53", "category": "股票数据 / 参考数据", "title": "股权质押统计数据", "interfaceName": "pledge_stat", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大1000", "desc": "获取股票质押统计数据", "points": 1000, "href": "/document/2?doc_id=110", "is_separate": false}, {"id": "j1_53", "category": "股票数据 / 参考数据", "title": "股权质押统计数据", "interfaceName": "pledge_stat", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大1000", "desc": "获取股票质押统计数据", "points": 2000, "href": "/document/2?doc_id=110", "is_separate": false}, {"id": "j1_54", "category": "股票数据 / 参考数据", "title": "股权质押明细", "interfaceName": "pledge_detail", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大1000", "desc": "获取股票质押明细数据", "points": 1000, "href": "/document/2?doc_id=111", "is_separate": false}, {"id": "j1_54", "category": "股票数据 / 参考数据", "title": "股权质押明细", "interfaceName": "pledge_detail", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大1000", "desc": "获取股票质押明细数据", "points": 2000, "href": "/document/2?doc_id=111", "is_separate": false}, {"id": "j1_55", "category": "股票数据 / 参考数据", "title": "股票回购", "interfaceName": "repurchase", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取上市公司回购股票数据", "points": 2000, "href": "/document/2?doc_id=124", "is_separate": false}, {"id": "j1_56", "category": "股票数据 / 参考数据", "title": "限售股解禁", "interfaceName": "share_float", "permissionText": "积分：120分可调取，每分钟内限制次数，超过5000积分频次相对较高，具体请参阅积分获取办法", "limit": "单次最大6000条，总量不限制积分：120分可调取，每分钟内限制次数，超过5000积分频次相对较高，具体请参阅积分获取办法", "desc": "获取限售股解禁限量：单次最大6000条，总量不限制积分：120分可调取，每分钟内限制次数，超过5000积分频次相对较高，具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=160", "is_separate": false}, {"id": "j1_56", "category": "股票数据 / 参考数据", "title": "限售股解禁", "interfaceName": "share_float", "permissionText": "积分：120分可调取，每分钟内限制次数，超过5000积分频次相对较高，具体请参阅积分获取办法", "limit": "单次最大6000条，总量不限制积分：120分可调取，每分钟内限制次数，超过5000积分频次相对较高，具体请参阅积分获取办法", "desc": "获取限售股解禁限量：单次最大6000条，总量不限制积分：120分可调取，每分钟内限制次数，超过5000积分频次相对较高，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=160", "is_separate": false}, {"id": "j1_57", "category": "股票数据 / 参考数据", "title": "大宗交易", "interfaceName": "block_trade", "permissionText": "积分：2000积分可调取，每分钟内限制次数，超过5000积分频次相对较高，具体请参阅积分获取办法", "limit": "单次最大1000条，总量不限制", "desc": "大宗交易", "points": 2000, "href": "/document/2?doc_id=161", "is_separate": false}, {"id": "j1_57", "category": "股票数据 / 参考数据", "title": "大宗交易", "interfaceName": "block_trade", "permissionText": "积分：2000积分可调取，每分钟内限制次数，超过5000积分频次相对较高，具体请参阅积分获取办法", "limit": "单次最大1000条，总量不限制", "desc": "大宗交易", "points": 5000, "href": "/document/2?doc_id=161", "is_separate": false}, {"id": "j1_58", "category": "股票数据 / 参考数据", "title": "股票账户开户数据", "interfaceName": "stk_account", "permissionText": "积分：600积分可调取，具体请参阅积分获取办法", "limit": "", "desc": "获取股票账户开户数据，统计周期为一周积分：600积分可调取，具体请参阅积分获取办法", "points": 600, "href": "/document/2?doc_id=164", "is_separate": false}, {"id": "j1_59", "category": "股票数据 / 参考数据", "title": "股票账户开户数据（旧）", "interfaceName": "stk_account_old", "permissionText": "积分：600积分可调取，具体请参阅积分获取办法", "limit": "", "desc": "获取股票账户开户数据旧版格式数据，数据从2008年1月开始，到2015年5月29，新数据请通过股票开户数据获取。积分：600积分可调取，具体请参阅积分获取办法", "points": 600, "href": "/document/2?doc_id=165", "is_separate": false}, {"id": "j1_60", "category": "股票数据 / 参考数据", "title": "股东人数", "interfaceName": "stk_holdernumber", "permissionText": "积分：600积分可调取，基础积分每分钟调取100次，5000积分以上频次相对较高。具体请参阅积分获取办法", "limit": "单次最大3000,总量不限制积分：600积分可调取，基础积分每分钟调取100次，5000积分以上频次相对较高。具体请参阅积分获取办法", "desc": "获取上市公司股东户数数据，数据不定期公布限量：单次最大3000,总量不限制积分：600积分可调取，基础积分每分钟调取100次，5000积分以上频次相对较高。具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=166", "is_separate": false}, {"id": "j1_60", "category": "股票数据 / 参考数据", "title": "股东人数", "interfaceName": "stk_holdernumber", "permissionText": "积分：600积分可调取，基础积分每分钟调取100次，5000积分以上频次相对较高。具体请参阅积分获取办法", "limit": "单次最大3000,总量不限制积分：600积分可调取，基础积分每分钟调取100次，5000积分以上频次相对较高。具体请参阅积分获取办法", "desc": "获取上市公司股东户数数据，数据不定期公布限量：单次最大3000,总量不限制积分：600积分可调取，基础积分每分钟调取100次，5000积分以上频次相对较高。具体请参阅积分获取办法", "points": 600, "href": "/document/2?doc_id=166", "is_separate": false}, {"id": "j1_60", "category": "股票数据 / 参考数据", "title": "股东人数", "interfaceName": "stk_holdernumber", "permissionText": "积分：600积分可调取，基础积分每分钟调取100次，5000积分以上频次相对较高。具体请参阅积分获取办法", "limit": "单次最大3000,总量不限制积分：600积分可调取，基础积分每分钟调取100次，5000积分以上频次相对较高。具体请参阅积分获取办法", "desc": "获取上市公司股东户数数据，数据不定期公布限量：单次最大3000,总量不限制积分：600积分可调取，基础积分每分钟调取100次，5000积分以上频次相对较高。具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=166", "is_separate": false}, {"id": "j1_61", "category": "股票数据 / 参考数据", "title": "股东增减持", "interfaceName": "stk_holdertrade", "permissionText": "积分：用户需要至少2000积分才可以调取。基础积分有流量控制，积分越多权限越大，5000积分以上无明显限制，请自行提高积分，具体请参阅积分获取办法", "limit": "单次最大提取3000行记录，总量不限制积分：用户需要至少2000积分才可以调取。基础积分有流量控制，积分越多权限越大，5000积分以上无明显限制，请自行提高积分，具体请参阅积分获取办法", "desc": "获取上市公司增减持数据，了解重要股东近期及历史上的股份增减变化限量：单次最大提取3000行记录，总量不限制积分：用户需要至少2000积分才可以调取。基础积分有流量控制，积分越多权限越大，5000积分以上无明显限制，请自行提高积分，具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=175", "is_separate": false}, {"id": "j1_61", "category": "股票数据 / 参考数据", "title": "股东增减持", "interfaceName": "stk_holdertrade", "permissionText": "积分：用户需要至少2000积分才可以调取。基础积分有流量控制，积分越多权限越大，5000积分以上无明显限制，请自行提高积分，具体请参阅积分获取办法", "limit": "单次最大提取3000行记录，总量不限制积分：用户需要至少2000积分才可以调取。基础积分有流量控制，积分越多权限越大，5000积分以上无明显限制，请自行提高积分，具体请参阅积分获取办法", "desc": "获取上市公司增减持数据，了解重要股东近期及历史上的股份增减变化限量：单次最大提取3000行记录，总量不限制积分：用户需要至少2000积分才可以调取。基础积分有流量控制，积分越多权限越大，5000积分以上无明显限制，请自行提高积分，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=175", "is_separate": false}, {"id": "j1_61", "category": "股票数据 / 参考数据", "title": "股东增减持", "interfaceName": "stk_holdertrade", "permissionText": "积分：用户需要至少2000积分才可以调取。基础积分有流量控制，积分越多权限越大，5000积分以上无明显限制，请自行提高积分，具体请参阅积分获取办法", "limit": "单次最大提取3000行记录，总量不限制积分：用户需要至少2000积分才可以调取。基础积分有流量控制，积分越多权限越大，5000积分以上无明显限制，请自行提高积分，具体请参阅积分获取办法", "desc": "获取上市公司增减持数据，了解重要股东近期及历史上的股份增减变化限量：单次最大提取3000行记录，总量不限制积分：用户需要至少2000积分才可以调取。基础积分有流量控制，积分越多权限越大，5000积分以上无明显限制，请自行提高积分，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=175", "is_separate": false}, {"id": "j1_63", "category": "股票数据 / 特色数据", "title": "卖方盈利预测数据", "interfaceName": "report_rc", "permissionText": "权限：本接口2000积分可以试用，每天10次请求，正式权限需8000积分，每天可请求100000次，10000积分以上无总量限制。", "limit": "单次最大3000条，可分页和循环提取所有数据", "desc": "获取券商（卖方）每天研报的盈利预测数据，数据从2010年开始，每晚19~22点更新当日数据", "points": 2000, "href": "/document/2?doc_id=292", "is_separate": false}, {"id": "j1_63", "category": "股票数据 / 特色数据", "title": "卖方盈利预测数据", "interfaceName": "report_rc", "permissionText": "权限：本接口2000积分可以试用，每天10次请求，正式权限需8000积分，每天可请求100000次，10000积分以上无总量限制。", "limit": "单次最大3000条，可分页和循环提取所有数据", "desc": "获取券商（卖方）每天研报的盈利预测数据，数据从2010年开始，每晚19~22点更新当日数据", "points": 8000, "href": "/document/2?doc_id=292", "is_separate": false}, {"id": "j1_63", "category": "股票数据 / 特色数据", "title": "卖方盈利预测数据", "interfaceName": "report_rc", "permissionText": "权限：本接口2000积分可以试用，每天10次请求，正式权限需8000积分，每天可请求100000次，10000积分以上无总量限制。", "limit": "单次最大3000条，可分页和循环提取所有数据", "desc": "获取券商（卖方）每天研报的盈利预测数据，数据从2010年开始，每晚19~22点更新当日数据", "points": 10000, "href": "/document/2?doc_id=292", "is_separate": false}, {"id": "j1_64", "category": "股票数据 / 特色数据", "title": "每日筹码及胜率", "interfaceName": "cyq_perf", "permissionText": "积分：5000积分每天20000次，10000积分每天200000次，15000积分每天不限总量", "limit": "单次最大6000条，可以分页或者循环提取", "desc": "获取A股每日筹码平均成本和胜率情况，每天18~19点左右更新，数据从2018年开始", "points": 5000, "href": "/document/2?doc_id=293", "is_separate": false}, {"id": "j1_64", "category": "股票数据 / 特色数据", "title": "每日筹码及胜率", "interfaceName": "cyq_perf", "permissionText": "积分：5000积分每天20000次，10000积分每天200000次，15000积分每天不限总量", "limit": "单次最大6000条，可以分页或者循环提取", "desc": "获取A股每日筹码平均成本和胜率情况，每天18~19点左右更新，数据从2018年开始", "points": 10000, "href": "/document/2?doc_id=293", "is_separate": false}, {"id": "j1_64", "category": "股票数据 / 特色数据", "title": "每日筹码及胜率", "interfaceName": "cyq_perf", "permissionText": "积分：5000积分每天20000次，10000积分每天200000次，15000积分每天不限总量", "limit": "单次最大6000条，可以分页或者循环提取", "desc": "获取A股每日筹码平均成本和胜率情况，每天18~19点左右更新，数据从2018年开始", "points": 15000, "href": "/document/2?doc_id=293", "is_separate": false}, {"id": "j1_65", "category": "股票数据 / 特色数据", "title": "每日筹码分布", "interfaceName": "cyq_chips", "permissionText": "积分：5000积分每天20000次每分钟可以取200次，10000积分每天200000次，15000积分每天不限总量", "limit": "单次最大6000条，可以按股票代码和日期循环提取", "desc": "获取A股每日的筹码分布情况，提供各价位占比，数据从2018年开始，每天18~19点之间更新当日数据", "points": 5000, "href": "/document/2?doc_id=294", "is_separate": false}, {"id": "j1_65", "category": "股票数据 / 特色数据", "title": "每日筹码分布", "interfaceName": "cyq_chips", "permissionText": "积分：5000积分每天20000次每分钟可以取200次，10000积分每天200000次，15000积分每天不限总量", "limit": "单次最大6000条，可以按股票代码和日期循环提取", "desc": "获取A股每日的筹码分布情况，提供各价位占比，数据从2018年开始，每天18~19点之间更新当日数据", "points": 10000, "href": "/document/2?doc_id=294", "is_separate": false}, {"id": "j1_65", "category": "股票数据 / 特色数据", "title": "每日筹码分布", "interfaceName": "cyq_chips", "permissionText": "积分：5000积分每天20000次每分钟可以取200次，10000积分每天200000次，15000积分每天不限总量", "limit": "单次最大6000条，可以按股票代码和日期循环提取", "desc": "获取A股每日的筹码分布情况，提供各价位占比，数据从2018年开始，每天18~19点之间更新当日数据", "points": 15000, "href": "/document/2?doc_id=294", "is_separate": false}, {"id": "j1_66", "category": "股票数据 / 特色数据", "title": "股票技术因子（量化因子）", "interfaceName": "stk_factor", "permissionText": "积分：5000积分每分钟可以请求100次，8000积分以上每分钟500次，具体请参阅积分获取办法", "limit": "单次最大10000条，可以循环或者分页提取", "desc": "获取股票每日技术面因子数据，用于跟踪股票当前走势情况，数据由Tushare社区自产，覆盖全历史", "points": 5000, "href": "/document/2?doc_id=296", "is_separate": false}, {"id": "j1_66", "category": "股票数据 / 特色数据", "title": "股票技术因子（量化因子）", "interfaceName": "stk_factor", "permissionText": "积分：5000积分每分钟可以请求100次，8000积分以上每分钟500次，具体请参阅积分获取办法", "limit": "单次最大10000条，可以循环或者分页提取", "desc": "获取股票每日技术面因子数据，用于跟踪股票当前走势情况，数据由Tushare社区自产，覆盖全历史", "points": 8000, "href": "/document/2?doc_id=296", "is_separate": false}, {"id": "j1_67", "category": "股票数据 / 特色数据", "title": "股票技术面因子(专业版)", "interfaceName": "stk_factor_pro", "permissionText": "积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次，具体请参阅积分获取办法", "limit": "单次调取最多返回10000条数据，可以通过日期参数循环", "desc": "获取股票每日技术面因子数据，用于跟踪股票当前走势情况，数据由Tushare社区自产，覆盖全历史；输出参数_bfq表示不复权，_qfq表示前复权 _hfq表示后复权，描述中说明了因子的默认传参，如需要特殊参数或者更多因子可以联系管理员评估", "points": 5000, "href": "/document/2?doc_id=328", "is_separate": false}, {"id": "j1_67", "category": "股票数据 / 特色数据", "title": "股票技术面因子(专业版)", "interfaceName": "stk_factor_pro", "permissionText": "积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次，具体请参阅积分获取办法", "limit": "单次调取最多返回10000条数据，可以通过日期参数循环", "desc": "获取股票每日技术面因子数据，用于跟踪股票当前走势情况，数据由Tushare社区自产，覆盖全历史；输出参数_bfq表示不复权，_qfq表示前复权 _hfq表示后复权，描述中说明了因子的默认传参，如需要特殊参数或者更多因子可以联系管理员评估", "points": 8000, "href": "/document/2?doc_id=328", "is_separate": false}, {"id": "j1_68", "category": "股票数据 / 特色数据", "title": "中央结算系统持股汇总", "interfaceName": "ccass_hold", "permissionText": "积分：用户120积分可以试用看数据，5000积分每分钟可以请求300次，8000积分以上可以请求500次每分钟，具体请参阅积分获取办法", "limit": "单次最大5000条数据，可循环或分页提供全部积分：用户120积分可以试用看数据，5000积分每分钟可以请求300次，8000积分以上可以请求500次每分钟，具体请参阅积分获取办法", "desc": "获取中央结算系统持股汇总数据，覆盖全部历史数据，根据交易所披露时间，当日数据在下一交易日早上9点前完成入库限量：单次最大5000条数据，可循环或分页提供全部积分：用户120积分可以试用看数据，5000积分每分钟可以请求300次，8000积分以上可以请求500次每分钟，具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=295", "is_separate": false}, {"id": "j1_68", "category": "股票数据 / 特色数据", "title": "中央结算系统持股汇总", "interfaceName": "ccass_hold", "permissionText": "积分：用户120积分可以试用看数据，5000积分每分钟可以请求300次，8000积分以上可以请求500次每分钟，具体请参阅积分获取办法", "limit": "单次最大5000条数据，可循环或分页提供全部积分：用户120积分可以试用看数据，5000积分每分钟可以请求300次，8000积分以上可以请求500次每分钟，具体请参阅积分获取办法", "desc": "获取中央结算系统持股汇总数据，覆盖全部历史数据，根据交易所披露时间，当日数据在下一交易日早上9点前完成入库限量：单次最大5000条数据，可循环或分页提供全部积分：用户120积分可以试用看数据，5000积分每分钟可以请求300次，8000积分以上可以请求500次每分钟，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=295", "is_separate": false}, {"id": "j1_68", "category": "股票数据 / 特色数据", "title": "中央结算系统持股汇总", "interfaceName": "ccass_hold", "permissionText": "积分：用户120积分可以试用看数据，5000积分每分钟可以请求300次，8000积分以上可以请求500次每分钟，具体请参阅积分获取办法", "limit": "单次最大5000条数据，可循环或分页提供全部积分：用户120积分可以试用看数据，5000积分每分钟可以请求300次，8000积分以上可以请求500次每分钟，具体请参阅积分获取办法", "desc": "获取中央结算系统持股汇总数据，覆盖全部历史数据，根据交易所披露时间，当日数据在下一交易日早上9点前完成入库限量：单次最大5000条数据，可循环或分页提供全部积分：用户120积分可以试用看数据，5000积分每分钟可以请求300次，8000积分以上可以请求500次每分钟，具体请参阅积分获取办法", "points": 8000, "href": "/document/2?doc_id=295", "is_separate": false}, {"id": "j1_69", "category": "股票数据 / 特色数据", "title": "中央结算系统持股明细", "interfaceName": "ccass_hold_detail", "permissionText": "积分：用户积8000积分可调取，每分钟可以请求300次", "limit": "单次最大返回6000条数据，可以循环或分页提取积分：用户积8000积分可调取，每分钟可以请求300次", "desc": "获取中央结算系统机构席位持股明细，数据覆盖全历史，根据交易所披露时间，当日数据在下一交易日早上9点前完成限量：单次最大返回6000条数据，可以循环或分页提取积分：用户积8000积分可调取，每分钟可以请求300次", "points": 8000, "href": "/document/2?doc_id=274", "is_separate": false}, {"id": "j1_70", "category": "股票数据 / 特色数据", "title": "沪深港股通持股明细", "interfaceName": "hk_hold", "permissionText": "积分：用户积120积分可调取试用，2000积分可正常使用，单位分钟有流控，积分越高流量越大，请自行提高积分，具体请参阅积分获取办法", "limit": "单次最多提取3800条记录，可循环调取，总量不限制", "desc": "获取沪深港股通持股明细，数据来源港交所。", "points": 120, "href": "/document/2?doc_id=188", "is_separate": false}, {"id": "j1_70", "category": "股票数据 / 特色数据", "title": "沪深港股通持股明细", "interfaceName": "hk_hold", "permissionText": "积分：用户积120积分可调取试用，2000积分可正常使用，单位分钟有流控，积分越高流量越大，请自行提高积分，具体请参阅积分获取办法", "limit": "单次最多提取3800条记录，可循环调取，总量不限制", "desc": "获取沪深港股通持股明细，数据来源港交所。", "points": 2000, "href": "/document/2?doc_id=188", "is_separate": false}, {"id": "j1_71", "category": "股票数据 / 特色数据", "title": "股票开盘集合竞价数据", "interfaceName": "stk_auction_o", "permissionText": "权限：本接口是单独开权限的数据，具体参考权限说明", "limit": "单次请求最大返回10000行数据，可根据日期循环", "desc": "股票开盘9:30集合竞价数据，每天盘后更新", "points": null, "href": "/document/2?doc_id=353", "is_separate": true}, {"id": "j1_72", "category": "股票数据 / 特色数据", "title": "股票收盘集合竞价数据", "interfaceName": "stk_auction_c", "permissionText": "权限：本接口是单独开权限的数据，具体参考权限说明", "limit": "单次请求最大返回10000行数据，可根据日期循环", "desc": "股票收盘15:00集合竞价数据，每天盘后更新", "points": null, "href": "/document/2?doc_id=354", "is_separate": true}, {"id": "j1_73", "category": "股票数据 / 特色数据", "title": "神奇九转指标", "interfaceName": "stk_nineturn", "permissionText": "权限：达到6000积分可以调用", "limit": "单次提取最大返回10000行数据，可通过股票代码和日期循环获取全部数据权限：达到6000积分可以调用", "desc": "神奇九转（又称“九转序列”）是一种基于技术分析的股票趋势反转指标，其思想来源于技术分析大师汤姆·迪马克（Tom DeMark）的TD序列。该指标的核心功能是通过识别股价在上涨或下跌过程中连续9天的特定走势，来判断股价的潜在反转点，从而帮助投资者提高抄底和逃顶的成功率，日线级别配合60min的九转效果更好，数据从20230101开始。限量：单次提取最大返回10000行数据，可通过股票代码和日期循环获取全部数据权限：达到6000积分可以调用", "points": 6000, "href": "/document/2?doc_id=364", "is_separate": false}, {"id": "j1_74", "category": "股票数据 / 特色数据", "title": "AH股比价", "interfaceName": "stk_ah_comparison", "permissionText": "权限：5000积分起提示：每天盘后17:00更新，单次请求最大返回1000行数据，可循环提取,本接口数据从20250812开始，由于历史不好补充，只能累积", "limit": "", "desc": "AH股比价数据，可根据交易日期获取历史权限：5000积分起提示：每天盘后17:00更新，单次请求最大返回1000行数据，可循环提取,本接口数据从20250812开始，由于历史不好补充，只能累积", "points": 5000, "href": "/document/2?doc_id=399", "is_separate": false}, {"id": "j1_75", "category": "股票数据 / 特色数据", "title": "机构调研表", "interfaceName": "stk_surv", "permissionText": "积分：用户积5000积分可使用", "limit": "单次最大获取100条数据，可循环或分页提取积分：用户积5000积分可使用", "desc": "获取上市公司机构调研记录数据限量：单次最大获取100条数据，可循环或分页提取积分：用户积5000积分可使用", "points": 5000, "href": "/document/2?doc_id=275", "is_separate": false}, {"id": "j1_76", "category": "股票数据 / 特色数据", "title": "券商每月荐股", "interfaceName": "broker_recommend", "permissionText": "积分：积分达到6000即可调用，具体请参阅积分获取办法", "limit": "单次最大1000行数据，可循环提取积分：积分达到6000即可调用，具体请参阅积分获取办法", "desc": "获取券商月度金股，一般1日~3日内更新当月数据限量：单次最大1000行数据，可循环提取积分：积分达到6000即可调用，具体请参阅积分获取办法", "points": null, "href": "/document/2?doc_id=267", "is_separate": true}, {"id": "j1_78", "category": "股票数据 / 两融及转融通", "title": "融资融券交易汇总", "interfaceName": "margin", "permissionText": "权限：2000积分可获得本接口权限，积分越高权限越大，具体参考权限说明", "limit": "单次请求最大返回4000行数据，可根据日期循环", "desc": "获取融资融券每日交易汇总数据，交易所于每天8点30左右更新上一日数据", "points": 2000, "href": "/document/2?doc_id=58", "is_separate": false}, {"id": "j1_79", "category": "股票数据 / 两融及转融通", "title": "融资融券交易明细", "interfaceName": "margin_detail", "permissionText": "权限：2000积分可获得本接口权限，积分越高权限越大，具体参考权限说明", "limit": "单次请求最大返回6000行数据，可根据日期循环", "desc": "获取沪深两市每日融资融券明细，，交易所于每天8点30左右更新上一日数据", "points": 2000, "href": "/document/2?doc_id=59", "is_separate": false}, {"id": "j1_80", "category": "股票数据 / 两融及转融通", "title": "融资融券标的（盘前更新）", "interfaceName": "margin_secs", "permissionText": "积分：2000积分可调取，5000积分无总量限制，积分越高权限越大，具体参考权限说明", "limit": "单次最大6000行数据，可根据股票代码、交易日期、交易所代码循环提取积分：2000积分可调取，5000积分无总量限制，积分越高权限越大，具体参考权限说明", "desc": "获取沪深京三大交易所融资融券标的（包括ETF），每天盘前更新限量：单次最大6000行数据，可根据股票代码、交易日期、交易所代码循环提取积分：2000积分可调取，5000积分无总量限制，积分越高权限越大，具体参考权限说明", "points": 2000, "href": "/document/2?doc_id=326", "is_separate": false}, {"id": "j1_80", "category": "股票数据 / 两融及转融通", "title": "融资融券标的（盘前更新）", "interfaceName": "margin_secs", "permissionText": "积分：2000积分可调取，5000积分无总量限制，积分越高权限越大，具体参考权限说明", "limit": "单次最大6000行数据，可根据股票代码、交易日期、交易所代码循环提取积分：2000积分可调取，5000积分无总量限制，积分越高权限越大，具体参考权限说明", "desc": "获取沪深京三大交易所融资融券标的（包括ETF），每天盘前更新限量：单次最大6000行数据，可根据股票代码、交易日期、交易所代码循环提取积分：2000积分可调取，5000积分无总量限制，积分越高权限越大，具体参考权限说明", "points": 5000, "href": "/document/2?doc_id=326", "is_separate": false}, {"id": "j1_81", "category": "股票数据 / 两融及转融通", "title": "转融券交易汇总", "interfaceName": "slb_sec", "permissionText": "积分：2000积分每分钟请求200次，5000积分500次请求", "limit": "单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "desc": "转融通转融券交易汇总限量：单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "points": 2000, "href": "/document/2?doc_id=332", "is_separate": false}, {"id": "j1_81", "category": "股票数据 / 两融及转融通", "title": "转融券交易汇总", "interfaceName": "slb_sec", "permissionText": "积分：2000积分每分钟请求200次，5000积分500次请求", "limit": "单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "desc": "转融通转融券交易汇总限量：单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "points": 5000, "href": "/document/2?doc_id=332", "is_separate": false}, {"id": "j1_82", "category": "股票数据 / 两融及转融通", "title": "转融资交易汇总", "interfaceName": "slb_len", "permissionText": "积分：2000积分每分钟请求200次，5000积分500次请求", "limit": "单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "desc": "转融通融资汇总限量：单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "points": 2000, "href": "/document/2?doc_id=331", "is_separate": false}, {"id": "j1_82", "category": "股票数据 / 两融及转融通", "title": "转融资交易汇总", "interfaceName": "slb_len", "permissionText": "积分：2000积分每分钟请求200次，5000积分500次请求", "limit": "单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "desc": "转融通融资汇总限量：单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "points": 5000, "href": "/document/2?doc_id=331", "is_separate": false}, {"id": "j1_83", "category": "股票数据 / 两融及转融通", "title": "转融券交易明细", "interfaceName": "slb_sec_detail", "permissionText": "积分：2000积分每分钟请求200次，5000积分500次请求", "limit": "单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "desc": "转融券交易明细限量：单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "points": 2000, "href": "/document/2?doc_id=333", "is_separate": false}, {"id": "j1_83", "category": "股票数据 / 两融及转融通", "title": "转融券交易明细", "interfaceName": "slb_sec_detail", "permissionText": "积分：2000积分每分钟请求200次，5000积分500次请求", "limit": "单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "desc": "转融券交易明细限量：单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "points": 5000, "href": "/document/2?doc_id=333", "is_separate": false}, {"id": "j1_84", "category": "股票数据 / 两融及转融通", "title": "做市借券交易汇总", "interfaceName": "slb_len_mm", "permissionText": "积分：2000积分每分钟请求200次，5000积分500次请求", "limit": "单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "desc": "做市借券交易汇总限量：单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "points": 2000, "href": "/document/2?doc_id=334", "is_separate": false}, {"id": "j1_84", "category": "股票数据 / 两融及转融通", "title": "做市借券交易汇总", "interfaceName": "slb_len_mm", "permissionText": "积分：2000积分每分钟请求200次，5000积分500次请求", "limit": "单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "desc": "做市借券交易汇总限量：单次最大可以提取5000行数据，可循环获取所有历史积分：2000积分每分钟请求200次，5000积分500次请求", "points": 5000, "href": "/document/2?doc_id=334", "is_separate": false}, {"id": "j1_86", "category": "股票数据 / 资金流向数据", "title": "个股资金流向", "interfaceName": "moneyflow", "permissionText": "积分：用户需要至少2000积分才可以调取，基础积分有流量控制，积分越多权限越大，请自行提高积分，具体请参阅积分获取办法", "limit": "单次最大提取6000行记录，总量不限制", "desc": "获取沪深A股票资金流向数据，分析大单小单成交情况，用于判别资金动向，数据开始于2010年。", "points": 120, "href": "/document/2?doc_id=170", "is_separate": false}, {"id": "j1_86", "category": "股票数据 / 资金流向数据", "title": "个股资金流向", "interfaceName": "moneyflow", "permissionText": "积分：用户需要至少2000积分才可以调取，基础积分有流量控制，积分越多权限越大，请自行提高积分，具体请参阅积分获取办法", "limit": "单次最大提取6000行记录，总量不限制", "desc": "获取沪深A股票资金流向数据，分析大单小单成交情况，用于判别资金动向，数据开始于2010年。", "points": 2000, "href": "/document/2?doc_id=170", "is_separate": false}, {"id": "j1_87", "category": "股票数据 / 资金流向数据", "title": "个股资金流向（THS）", "interfaceName": "moneyflow_ths", "permissionText": "积分：6000积分可调取，具体请参阅积分获取办法", "limit": "单次最大6000，可根据日期或股票代码循环提取数据", "desc": "获取同花顺个股资金流向数据，每日盘后更新", "points": 6000, "href": "/document/2?doc_id=348", "is_separate": false}, {"id": "j1_88", "category": "股票数据 / 资金流向数据", "title": "个股资金流向（DC）", "interfaceName": "moneyflow_dc", "permissionText": "积分：用户需要至少5000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大获取6000条数据，可根据日期或股票代码循环提取数据积分：用户需要至少5000积分才可以调取，具体请参阅积分获取办法", "desc": "获取东方财富个股资金流向数据，每日盘后更新，数据开始于20230911限量：单次最大获取6000条数据，可根据日期或股票代码循环提取数据积分：用户需要至少5000积分才可以调取，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=349", "is_separate": false}, {"id": "j1_89", "category": "股票数据 / 资金流向数据", "title": "同花顺概念板块资金流向（THS）", "interfaceName": "moneyflow_cnt_ths", "permissionText": "积分：6000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大可调取5000条数据，可以根据日期和代码循环提取全部数据", "desc": "获取同花顺概念板块每日资金流向", "points": 6000, "href": "/document/2?doc_id=371", "is_separate": false}, {"id": "j1_90", "category": "股票数据 / 资金流向数据", "title": "同花顺行业资金流向（THS）", "interfaceName": "moneyflow_ind_ths", "permissionText": "积分：6000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大可调取5000条数据，可以根据日期和代码循环提取全部数据", "desc": "获取同花顺行业资金流向，每日盘后更新", "points": 6000, "href": "/document/2?doc_id=343", "is_separate": false}, {"id": "j1_91", "category": "股票数据 / 资金流向数据", "title": "东财概念及行业板块资金流向（DC）", "interfaceName": "moneyflow_ind_dc", "permissionText": "积分：6000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大可调取5000条数据，可以根据日期和代码循环提取全部数据", "desc": "获取东方财富板块资金流向，每天盘后更新", "points": 6000, "href": "/document/2?doc_id=344", "is_separate": false}, {"id": "j1_92", "category": "股票数据 / 资金流向数据", "title": "大盘资金流向（DC）", "interfaceName": "moneyflow_mkt_dc", "permissionText": "积分：120积分可试用，6000积分可正式调取，具体请参阅积分获取办法", "limit": "单次最大3000条，可根据日期或日期区间循环获取", "desc": "获取东方财富大盘资金流向数据，每日盘后更新", "points": 120, "href": "/document/2?doc_id=345", "is_separate": false}, {"id": "j1_92", "category": "股票数据 / 资金流向数据", "title": "大盘资金流向（DC）", "interfaceName": "moneyflow_mkt_dc", "permissionText": "积分：120积分可试用，6000积分可正式调取，具体请参阅积分获取办法", "limit": "单次最大3000条，可根据日期或日期区间循环获取", "desc": "获取东方财富大盘资金流向数据，每日盘后更新", "points": 6000, "href": "/document/2?doc_id=345", "is_separate": false}, {"id": "j1_93", "category": "股票数据 / 资金流向数据", "title": "沪深港通资金流向", "interfaceName": "moneyflow_hsgt", "permissionText": "积分要求：2000积分起，5000积分每分钟可提取500次", "limit": "", "desc": "获取沪股通、深股通、港股通每日资金流向数据，每次最多返回300条记录，总量不限制。", "points": 2000, "href": "/document/2?doc_id=47", "is_separate": false}, {"id": "j1_93", "category": "股票数据 / 资金流向数据", "title": "沪深港通资金流向", "interfaceName": "moneyflow_hsgt", "permissionText": "积分要求：2000积分起，5000积分每分钟可提取500次", "limit": "", "desc": "获取沪股通、深股通、港股通每日资金流向数据，每次最多返回300条记录，总量不限制。", "points": 5000, "href": "/document/2?doc_id=47", "is_separate": false}, {"id": "j1_95", "category": "股票数据 / 打板专题数据", "title": "龙虎榜每日明细", "interfaceName": "top_list", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次请求返回最大10000行数据，可通过参数循环获取全部历史积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "desc": "龙虎榜每日交易明细数据历史： 2005年至今限量：单次请求返回最大10000行数据，可通过参数循环获取全部历史积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=106", "is_separate": false}, {"id": "j1_96", "category": "股票数据 / 打板专题数据", "title": "龙虎榜机构明细", "interfaceName": "top_inst", "permissionText": "积分：用户需要至少5000积分才可以调取，具体请参阅积分获取办法", "limit": "单次请求最大返回10000行数据，可根据参数循环获取全部历史", "desc": "龙虎榜机构成交明细", "points": 5000, "href": "/document/2?doc_id=107", "is_separate": false}, {"id": "j1_97", "category": "股票数据 / 打板专题数据", "title": "涨跌停榜单（同花顺）", "interfaceName": "limit_list_ths", "permissionText": "积分：8000积分以上每分钟500次，每天总量不限制，具体请参阅积分获取办法", "limit": "单次最大4000条，可根据日期或股票代码循环提取", "desc": "获取同花顺每日涨跌停榜单数据，历史数据从20231101开始提供，增量每天16点左右更新，：分类（limit_type  涨停池、连扳池、冲刺涨停、炸板池、跌停池，默认：涨停池）不同，字段返回有值情况也不同，如仅有涨停池、连扳池  有最大封单 lu_limit_order返回值，其他分类为空", "points": 8000, "href": "/document/2?doc_id=355", "is_separate": false}, {"id": "j1_98", "category": "股票数据 / 打板专题数据", "title": "涨跌停列表（新）", "interfaceName": "limit_list_d", "permissionText": "积分：5000积分每分钟可以请求200次每天总量1万次，8000积分以上每分钟500次每天总量不限制，具体请参阅积分获取办法", "limit": "单次最大可以获取2500条数据，可通过日期或者股票循环提取积分：5000积分每分钟可以请求200次每天总量1万次，8000积分以上每分钟500次每天总量不限制，具体请参阅积分获取办法", "desc": "获取A股每日涨跌停、炸板数据情况，数据从2020年开始（不提供ST股票的统计）限量：单次最大可以获取2500条数据，可通过日期或者股票循环提取积分：5000积分每分钟可以请求200次每天总量1万次，8000积分以上每分钟500次每天总量不限制，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=298", "is_separate": false}, {"id": "j1_98", "category": "股票数据 / 打板专题数据", "title": "涨跌停列表（新）", "interfaceName": "limit_list_d", "permissionText": "积分：5000积分每分钟可以请求200次每天总量1万次，8000积分以上每分钟500次每天总量不限制，具体请参阅积分获取办法", "limit": "单次最大可以获取2500条数据，可通过日期或者股票循环提取积分：5000积分每分钟可以请求200次每天总量1万次，8000积分以上每分钟500次每天总量不限制，具体请参阅积分获取办法", "desc": "获取A股每日涨跌停、炸板数据情况，数据从2020年开始（不提供ST股票的统计）限量：单次最大可以获取2500条数据，可通过日期或者股票循环提取积分：5000积分每分钟可以请求200次每天总量1万次，8000积分以上每分钟500次每天总量不限制，具体请参阅积分获取办法", "points": 8000, "href": "/document/2?doc_id=298", "is_separate": false}, {"id": "j1_99", "category": "股票数据 / 打板专题数据", "title": "连板天梯", "interfaceName": "limit_step", "permissionText": "积分：8000积分以上每分钟500次，每天总量不限制，具体请参阅积分获取办法", "limit": "单次最大2000行数据，可根据股票代码或者日期循环提取全部积分：8000积分以上每分钟500次，每天总量不限制，具体请参阅积分获取办法", "desc": "获取每天连板个数晋级的股票，可以分析出每天连续涨停进阶个数，判断强势热度限量：单次最大2000行数据，可根据股票代码或者日期循环提取全部积分：8000积分以上每分钟500次，每天总量不限制，具体请参阅积分获取办法", "points": 8000, "href": "/document/2?doc_id=356", "is_separate": false}, {"id": "j1_100", "category": "股票数据 / 打板专题数据", "title": "最强板块统计", "interfaceName": "limit_cpt_list", "permissionText": "积分：8000积分以上每分钟500次，每天总量不限制，具体请参阅积分获取办法", "limit": "单次最大2000行数据，可根据股票代码或者日期循环提取全部", "desc": "获取每天涨停股票最多最强的概念板块，可以分析强势板块的轮动，判断资金动向", "points": 8000, "href": "/document/2?doc_id=357", "is_separate": false}, {"id": "j1_101", "category": "股票数据 / 打板专题数据", "title": "概念和行业指数", "interfaceName": "ths_index", "permissionText": "权限：本接口需有6000积分，单次最大返回5000行数据，一次可提取全部数据，请勿循环提取。", "limit": "", "desc": "获取板块指数，包括概念、行业、特色指数。", "points": 6000, "href": "/document/2?doc_id=259", "is_separate": false}, {"id": "j1_102", "category": "股票数据 / 打板专题数据", "title": "板块指数行情", "interfaceName": "ths_daily", "permissionText": "积分），可根据指数代码、日期参数循环提取", "limit": "单次最大3000行数据（需6000积分），可根据指数代码、日期参数循环提取", "desc": "获取板块指数行情", "points": 6000, "href": "/document/2?doc_id=260", "is_separate": false}, {"id": "j1_103", "category": "股票数据 / 打板专题数据", "title": "概念板块成分", "interfaceName": "ths_member", "permissionText": "积分可调取，每分钟可调取200次，可按概念板块代码循环提取所有成分", "limit": "用户积累6000积分可调取，每分钟可调取200次，可按概念板块代码循环提取所有成分", "desc": "获取概念板块成分列表", "points": 6000, "href": "/document/2?doc_id=261", "is_separate": false}, {"id": "j1_104", "category": "股票数据 / 打板专题数据", "title": "概念板块", "interfaceName": "dc_index", "permissionText": "权限：用户积累6000积分可调取，具体请参阅积分获取办法", "limit": "单次最大可获取5000条数据，历史数据可根据日期循环获取", "desc": "获取每个交易日的概念板块数据，支持按日期查询", "points": 6000, "href": "/document/2?doc_id=362", "is_separate": false}, {"id": "j1_105", "category": "股票数据 / 打板专题数据", "title": "板块成分", "interfaceName": "dc_member", "permissionText": "权限：用户积累6000积分可调取，具体请参阅积分获取办法", "limit": "单次最大获取5000条数据，可以通过日期和代码循环获取", "desc": "获取板块每日成分数据，可以根据概念板块代码和交易日期，获取历史成分", "points": 6000, "href": "/document/2?doc_id=363", "is_separate": false}, {"id": "j1_106", "category": "股票数据 / 打板专题数据", "title": "概念板块行情", "interfaceName": "dc_daily", "permissionText": "权限：用户积累6000积分可调取，具体请参阅积分获取办法", "limit": "单次最大2000条数据，可根据日期参数循环获取", "desc": "获取概念板块、行业指数板块、地域板块行情数据，历史数据开始于2020年", "points": 6000, "href": "/document/2?doc_id=382", "is_separate": false}, {"id": "j1_107", "category": "股票数据 / 打板专题数据", "title": "当日集合竞价", "interfaceName": "stk_auction", "permissionText": "积分：本接口是单独开权限的数据，单独申请权限请参考权限列表。", "limit": "单次最大返回8000行数据，可根据日期或代码循环获取历史", "desc": "获取当日个股和ETF的集合竞价成交情况，每天9点26~29分之间可以获取当日的集合竞价成交数据。本接口历史数据开始于2025年1月。", "points": null, "href": "/document/2?doc_id=369", "is_separate": true}, {"id": "j1_108", "category": "股票数据 / 打板专题数据", "title": "游资名录", "interfaceName": "hm_list", "permissionText": "积分：5000积分可以调取，积分获取办法请参阅积分获取办法", "limit": "单次最大1000条数据，目前总量未超过500积分：5000积分可以调取，积分获取办法请参阅积分获取办法", "desc": "获取游资分类名录信息限量：单次最大1000条数据，目前总量未超过500积分：5000积分可以调取，积分获取办法请参阅积分获取办法", "points": 500, "href": "/document/2?doc_id=311", "is_separate": false}, {"id": "j1_108", "category": "股票数据 / 打板专题数据", "title": "游资名录", "interfaceName": "hm_list", "permissionText": "积分：5000积分可以调取，积分获取办法请参阅积分获取办法", "limit": "单次最大1000条数据，目前总量未超过500积分：5000积分可以调取，积分获取办法请参阅积分获取办法", "desc": "获取游资分类名录信息限量：单次最大1000条数据，目前总量未超过500积分：5000积分可以调取，积分获取办法请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=311", "is_separate": false}, {"id": "j1_109", "category": "股票数据 / 打板专题数据", "title": "游资每日明细", "interfaceName": "hm_detail", "permissionText": "积分：用户积10000积分可调取使用，积分获取办法请参阅积分获取办法", "limit": "单次最多提取2000条记录，可循环调取，总量不限制积分：用户积10000积分可调取使用，积分获取办法请参阅积分获取办法", "desc": "获取每日游资交易明细，数据开始于2022年8。游资分类名录，请点击游资名录限量：单次最多提取2000条记录，可循环调取，总量不限制积分：用户积10000积分可调取使用，积分获取办法请参阅积分获取办法", "points": 10000, "href": "/document/2?doc_id=312", "is_separate": false}, {"id": "j1_110", "category": "股票数据 / 打板专题数据", "title": "THS热榜", "interfaceName": "ths_hot", "permissionText": "积分：用户积6000积分可调取使用，积分获取办法请参阅积分获取办法", "limit": "单次最大2000条，可根据日期等参数循环获取全部数据", "desc": "获取热榜数据，包括热股、概念板块、ETF、可转债、港美股等等，每日盘中提取4次，收盘后4次，最晚22点提取一次。", "points": 6000, "href": "/document/2?doc_id=320", "is_separate": false}, {"id": "j1_111", "category": "股票数据 / 打板专题数据", "title": "DC热榜", "interfaceName": "dc_hot", "permissionText": "积分：用户积8000积分可调取使用，积分获取办法请参阅积分获取办法", "limit": "单次最大2000条，可根据日期等参数循环获取全部数据", "desc": "获取热榜数据，包括A股市场、ETF基金、港股市场、美股市场等等，每日盘中提取4次，收盘后4次，最晚22点提取一次。", "points": 8000, "href": "/document/2?doc_id=321", "is_separate": false}, {"id": "j1_112", "category": "股票数据 / 打板专题数据", "title": "TDX板块信息", "interfaceName": "tdx_index", "permissionText": "权限：用户积累6000积分可调取，具体请参阅积分获取办法", "limit": "单次最大1000条数据，可根据日期参数循环提取", "desc": "获取板块基础信息，包括概念板块、行业、风格、地域等", "points": 6000, "href": "/document/2?doc_id=376", "is_separate": false}, {"id": "j1_113", "category": "股票数据 / 打板专题数据", "title": "TDX板块成分", "interfaceName": "tdx_member", "permissionText": "权限：用户积累6000积分可调取，具体请参阅积分获取办法", "limit": "单次最大3000条数据，可以根据日期和板块代码循环提取", "desc": "获取各板块成分股信息", "points": 6000, "href": "/document/2?doc_id=377", "is_separate": false}, {"id": "j1_114", "category": "股票数据 / 打板专题数据", "title": "TDX板块行情", "interfaceName": "tdx_daily", "permissionText": "权限：用户积累6000积分可调取，具体请参阅积分获取办法", "limit": "单次提取最大3000条数据，可根据板块代码和日期参数循环提取", "desc": "获取各板块行情，包括成交和估值等数据", "points": 6000, "href": "/document/2?doc_id=378", "is_separate": false}, {"id": "j1_115", "category": "股票数据 / 打板专题数据", "title": "开盘啦榜单数据", "interfaceName": "kpl_list", "permissionText": "积分：5000积分每分钟可以请求200次每天总量1万次，8000积分以上每分钟500次每天总量不限制，具体请参阅积分获取办法", "limit": "单次最大8000条数据，可根据日期循环获取历史数据", "desc": "获取涨停、跌停、炸板等榜单数据", "points": 5000, "href": "/document/2?doc_id=347", "is_separate": false}, {"id": "j1_115", "category": "股票数据 / 打板专题数据", "title": "开盘啦榜单数据", "interfaceName": "kpl_list", "permissionText": "积分：5000积分每分钟可以请求200次每天总量1万次，8000积分以上每分钟500次每天总量不限制，具体请参阅积分获取办法", "limit": "单次最大8000条数据，可根据日期循环获取历史数据", "desc": "获取涨停、跌停、炸板等榜单数据", "points": 8000, "href": "/document/2?doc_id=347", "is_separate": false}, {"id": "j1_116", "category": "股票数据 / 打板专题数据", "title": "开盘啦题材成分", "interfaceName": "kpl_concept_cons", "permissionText": "积分：5000积分可提取数据，具体请参阅积分获取办法", "limit": "单次最大3000条，可根据代码和日期循环获取全部数据", "desc": "获取概念题材的成分股", "points": 5000, "href": "/document/2?doc_id=351", "is_separate": false}, {"id": "j1_117", "category": "股票数据 / 打板专题数据", "title": "题材库", "interfaceName": "dc_concept", "permissionText": "积分：6000积分可提取数据，具体请参阅积分获取办法", "limit": "单次最大5000，可根据日期循环获取历史数据,（数据从20260203开始）", "desc": "获取概念题材列表，每天盘后更新", "points": 6000, "href": "/document/2?doc_id=421", "is_separate": false}, {"id": "j1_118", "category": "股票数据 / 打板专题数据", "title": "题材成分", "interfaceName": "dc_concept_cons", "permissionText": "积分：6000积分可提取数据，具体请参阅积分获取办法", "limit": "单次最大3000，可根据日期循环获取历史数据,（数据从20260203开始）", "desc": "获取概念题材的成分股，每天盘后更新", "points": 6000, "href": "/document/2?doc_id=422", "is_separate": false}, {"id": "j1_120", "category": "ETF专题", "title": "ETF基础信息", "interfaceName": "etf_basic", "permissionText": "权限：用户积8000积分可调取，具体请参阅积分获取办法", "limit": "单次请求最大放回5000条数据（当前ETF总数未超过2000）权限：用户积8000积分可调取，具体请参阅积分获取办法", "desc": "获取国内ETF基础信息，包括了QDII。数据来源与沪深交易所公开披露信息。限量：单次请求最大放回5000条数据（当前ETF总数未超过2000）权限：用户积8000积分可调取，具体请参阅积分获取办法", "points": 8000, "href": "/document/2?doc_id=385", "is_separate": false}, {"id": "j1_121", "category": "ETF专题", "title": "ETF基准指数列表", "interfaceName": "etf_index", "permissionText": "权限：用户积累8000积分可调取，具体请参阅积分获取办法", "limit": "单次请求最大返回5000行数据（当前未超过2000个）权限：用户积累8000积分可调取，具体请参阅积分获取办法", "desc": "获取ETF基准指数列表信息限量：单次请求最大返回5000行数据（当前未超过2000个）权限：用户积累8000积分可调取，具体请参阅积分获取办法", "points": 8000, "href": "/document/2?doc_id=386", "is_separate": false}, {"id": "j1_122", "category": "ETF专题", "title": "ETF实时分钟", "interfaceName": "rt_etf_min", "permissionText": "权限：正式权限请参阅 权限说明", "limit": "单次最大1000行数据，可以通过ETF代码提取数据，支持逗号分隔的多个代码同时提取", "desc": "获取ETF实时分钟数据，包括1~60min", "points": null, "href": "/document/2?doc_id=416", "is_separate": true}, {"id": "j1_123", "category": "ETF专题", "title": "ETF实时分钟-日累计", "interfaceName": "rt_etf_min_daily", "permissionText": "权限：正式权限请参阅 权限说明", "limit": "单次最大1000行数据，支持股票当日开盘以来的所有ETF历史分钟数据提取（仅支持一个个代码提取，不同同时提取多个）", "desc": "获取ETF实时分钟数据日累计，包括1~60min", "points": null, "href": "/document/2?doc_id=470", "is_separate": true}, {"id": "j1_124", "category": "ETF专题", "title": "ETF历史分钟行情", "interfaceName": "etf_mins", "permissionText": "权限：正式权限请参阅 权限说明", "limit": "单次最大8000行数据，可以通过股票代码和时间循环获取，本接口可以提供超过10年ETF历史分钟数据", "desc": "获取ETF分钟数据，支持1min/5min/15min/30min/60min行情，提供Python SDK和 http Restful API两种方式", "points": null, "href": "/document/2?doc_id=387", "is_separate": true}, {"id": "j1_125", "category": "ETF专题", "title": "ETF实时日线", "interfaceName": "rt_etf_k", "permissionText": "积分：本接口是单独开权限的数据，单独申请权限请参考权限列表", "limit": "", "desc": "获取ETF实时日k线行情，支持按ETF代码或代码通配符一次性提取全部ETF实时日k线行情", "points": null, "href": "/document/2?doc_id=400", "is_separate": true}, {"id": "j1_126", "category": "ETF专题", "title": "ETF日线行情", "interfaceName": "fund_daily", "permissionText": "积分：需要至少5000积分才可以调取，8000积分频次更高，具体请参阅积分获取办法", "limit": "单次最大5000行记录，可以根据ETF代码和日期循环获取历史，总量不限制", "desc": "获取ETF行情每日收盘后成交数据，历史超过10年", "points": 5000, "href": "/document/2?doc_id=127", "is_separate": false}, {"id": "j1_126", "category": "ETF专题", "title": "ETF日线行情", "interfaceName": "fund_daily", "permissionText": "积分：需要至少5000积分才可以调取，8000积分频次更高，具体请参阅积分获取办法", "limit": "单次最大5000行记录，可以根据ETF代码和日期循环获取历史，总量不限制", "desc": "获取ETF行情每日收盘后成交数据，历史超过10年", "points": 8000, "href": "/document/2?doc_id=127", "is_separate": false}, {"id": "j1_127", "category": "ETF专题", "title": "基金复权因子", "interfaceName": "fund_adj", "permissionText": "积分：用户积600积分可调取，超过5000积分以上频次相对较高。具体请参阅积分获取办法", "limit": "单次最大提取2000行记录，可循环提取，数据总量不限制", "desc": "获取基金复权因子，用于计算基金复权行情", "points": 600, "href": "/document/2?doc_id=199", "is_separate": false}, {"id": "j1_127", "category": "ETF专题", "title": "基金复权因子", "interfaceName": "fund_adj", "permissionText": "积分：用户积600积分可调取，超过5000积分以上频次相对较高。具体请参阅积分获取办法", "limit": "单次最大提取2000行记录，可循环提取，数据总量不限制", "desc": "获取基金复权因子，用于计算基金复权行情", "points": 5000, "href": "/document/2?doc_id=199", "is_separate": false}, {"id": "j1_128", "category": "ETF专题", "title": "ETF份额规模", "interfaceName": "etf_share_size", "permissionText": "积分：需要8000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大5000条，可根据代码或日期循环提取", "desc": "获取沪深ETF每日份额和规模数据，能体现规模份额的变化，掌握ETF资金动向，同时提供每日净值和收盘价；数据指标是分批入库，交易所于次日早8点30左右更新上一交易日的数据；另外，涉及海外的ETF数据更新会晚一些属于正常情况。", "points": 8000, "href": "/document/2?doc_id=408", "is_separate": false}, {"id": "j1_129", "category": "ETF专题", "title": "ETF每日持仓组合(沪市）", "interfaceName": "etf_sh_cons", "permissionText": "积分：需要8000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大3000条，可根据代码或日期循环提取", "desc": "获取上交所场内所有ETF每日的持仓组合信息,包括成分股票数量、申赎现金折溢价比例等数据", "points": 8000, "href": "/document/2?doc_id=471", "is_separate": false}, {"id": "j1_130", "category": "ETF专题", "title": "ETF每日持仓组合(深市）", "interfaceName": "etf_sz_cons", "permissionText": "积分：需要8000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大3000条，可根据代码或日期循环提取", "desc": "获取深交所场内所有ETF每日的持仓组合信息,包括成分股票数量、申赎现金折溢价比例等数据", "points": 8000, "href": "/document/2?doc_id=472", "is_separate": false}, {"id": "j1_131", "category": "ETF专题", "title": "ETF实时参考", "interfaceName": "rt_etf_sz_iopv", "permissionText": "权限：本接口为单独开权限的接口，跟积分多个无关。正式权限请参阅 权限说明", "limit": "单次最大5000条，完全覆盖当前总量", "desc": "ETF实时净值和申购赎回数据参考，目前只提供深市", "points": null, "href": "/document/2?doc_id=454", "is_separate": true}, {"id": "j1_132", "category": "ETF专题", "title": "指数公告", "interfaceName": "idx_anns", "permissionText": "积分：需要6000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大返回1000条数据，可根据日期循环提取", "desc": "获取指数公司披露的相关公告信息，包括中证指数、国证指数、恒生指数和华证指数的及时与历史公告信息，跟踪指数最新信息和发展方向。", "points": 6000, "href": "/document/2?doc_id=460", "is_separate": false}, {"id": "j1_134", "category": "指数专题", "title": "指数基本信息", "interfaceName": "index_basic", "permissionText": "", "limit": "", "desc": "获取指数基础信息。", "points": null, "href": "/document/2?doc_id=94", "is_separate": true}, {"id": "j1_135", "category": "指数专题", "title": "指数日线行情", "interfaceName": "index_daily", "permissionText": "权限：用户累积2000积分可调取，5000积分以上频次相对较高，具体请参阅积分获取办法", "limit": "", "desc": "获取指数每日行情，还可以通过bar接口获取。由于服务器压力，目前规则是单次调取最多取8000行记录，可以设置start和end日期补全。指数行情也可以通过通用行情接口获取数据。本接口不包含申万行业指数行情数据。", "points": 2000, "href": "/document/2?doc_id=95", "is_separate": false}, {"id": "j1_135", "category": "指数专题", "title": "指数日线行情", "interfaceName": "index_daily", "permissionText": "权限：用户累积2000积分可调取，5000积分以上频次相对较高，具体请参阅积分获取办法", "limit": "", "desc": "获取指数每日行情，还可以通过bar接口获取。由于服务器压力，目前规则是单次调取最多取8000行记录，可以设置start和end日期补全。指数行情也可以通过通用行情接口获取数据。本接口不包含申万行业指数行情数据。", "points": 5000, "href": "/document/2?doc_id=95", "is_separate": false}, {"id": "j1_136", "category": "指数专题", "title": "交易所指数实时日线", "interfaceName": "rt_idx_k", "permissionText": "积分：本接口是单独开权限的数据，单独申请权限请参考权限列表", "limit": "", "desc": "获取交易所指数实时日线行情，支持按代码或代码通配符一次性提取全部交易所指数实时日k线行情", "points": null, "href": "/document/2?doc_id=403", "is_separate": true}, {"id": "j1_137", "category": "指数专题", "title": "A股实时分钟", "interfaceName": "rt_idx_min", "permissionText": "权限：正式权限请参阅 权限说明", "limit": "单次最大1000行数据，可以通过股票代码提取数据，支持逗号分隔的多个代码同时提取", "desc": "获取交易所指数实时分钟数据，包括1~60min", "points": null, "href": "/document/2?doc_id=420", "is_separate": true}, {"id": "j1_138", "category": "指数专题", "title": "指数周线行情", "interfaceName": "index_weekly", "permissionText": "积分：用户需要至少600积分才可以调取，积分越多频次越高，具体请参阅积分获取办法", "limit": "单次最大1000行记录，可分批获取，总量不限制积分：用户需要至少600积分才可以调取，积分越多频次越高，具体请参阅积分获取办法", "desc": "获取指数周线行情限量：单次最大1000行记录，可分批获取，总量不限制积分：用户需要至少600积分才可以调取，积分越多频次越高，具体请参阅积分获取办法", "points": 600, "href": "/document/2?doc_id=171", "is_separate": false}, {"id": "j1_139", "category": "指数专题", "title": "指数历史分钟行情", "interfaceName": "idx_mins", "permissionText": "权限：需单独开权限，正式权限请参阅 权限说明  ，可以在线开通分钟权限。", "limit": "单次最大8000行数据，可以通过指数代码和时间循环获取，本接口可以提供超过10年历史分钟数据", "desc": "获取交易所指数分钟数据，支持1min/5min/15min/30min/60min行情，提供Python SDK和 http Restful API两种方式", "points": null, "href": "/document/2?doc_id=419", "is_separate": true}, {"id": "j1_140", "category": "指数专题", "title": "指数月线行情", "interfaceName": "index_monthly", "permissionText": "积分：用户需要至少600积分才可以调取，积分越多频次越高，具体请参阅积分获取办法", "limit": "单次最大1000行记录,可多次获取,总量不限制积分：用户需要至少600积分才可以调取，积分越多频次越高，具体请参阅积分获取办法", "desc": "获取指数月线行情,每月更新一次限量：单次最大1000行记录,可多次获取,总量不限制积分：用户需要至少600积分才可以调取，积分越多频次越高，具体请参阅积分获取办法", "points": 600, "href": "/document/2?doc_id=172", "is_separate": false}, {"id": "j1_141", "category": "指数专题", "title": "指数成分和权重", "interfaceName": "index_weight", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取各类指数成分和权重，月度数据 ，建议输入参数里开始日期和结束日分别输入当月第一天和最后一天的日期。来源：指数公司网站公开数据积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=96", "is_separate": false}, {"id": "j1_142", "category": "指数专题", "title": "大盘指数每日指标", "interfaceName": "index_dailybasic", "permissionText": "权限：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "目前只提供上证综指，深证成指，上证50，中证500，中小板指，创业板指的每日指标数据", "points": 2000, "href": "/document/2?doc_id=128", "is_separate": false}, {"id": "j1_143", "category": "指数专题", "title": "申万行业分类", "interfaceName": "index_classify", "permissionText": "权限：用户需2000积分可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取申万行业分类，可以获取申万2014年版本（28个一级分类，104个二级分类，227个三级分类）和2021年本版（31个一级分类，134个二级分类，346个三级分类）列表信息", "points": 2000, "href": "/document/2?doc_id=181", "is_separate": false}, {"id": "j1_144", "category": "指数专题", "title": "申万行业成分构成(分级)", "interfaceName": "index_member_all", "permissionText": "权限：用户需2000积分可调取，积分获取方法请参阅积分获取办法", "limit": "单次最大2000行，总量不限制权限：用户需2000积分可调取，积分获取方法请参阅积分获取办法", "desc": "按三级分类提取申万行业成分，可提供某个分类的所有成分，也可按股票代码提取所属分类，参数灵活限量：单次最大2000行，总量不限制权限：用户需2000积分可调取，积分获取方法请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=335", "is_separate": false}, {"id": "j1_145", "category": "指数专题", "title": "申万行业日线行情", "interfaceName": "sw_daily", "permissionText": "积分可调取", "limit": "单次最大4000行数据，可通过指数代码和日期参数循环提取，5000积分可调取", "desc": "获取申万行业日线行情（默认是申万2021版行情）限量：单次最大4000行数据，可通过指数代码和日期参数循环提取，5000积分可调取", "points": 5000, "href": "/document/2?doc_id=327", "is_separate": false}, {"id": "j1_146", "category": "指数专题", "title": "申万实时行情", "interfaceName": "rt_sw_k", "permissionText": "积分：本接口是单独开权限的数据，单独申请权限请参考权限列表", "limit": "", "desc": "获取申万行业指数的最新截面数据", "points": null, "href": "/document/2?doc_id=417", "is_separate": true}, {"id": "j1_147", "category": "指数专题", "title": "SW指数历史分钟", "interfaceName": "sw_mins", "permissionText": "积分：本接口是单独的权限，具体请参阅积分获取办法", "limit": "单次最大5000条，可根据代码或日期循环提取", "desc": "获取申万指数历史分钟数据", "points": null, "href": "/document/2?doc_id=469", "is_separate": true}, {"id": "j1_148", "category": "指数专题", "title": "中信行业成分", "interfaceName": "ci_index_member", "permissionText": "权限：用户需5000积分可调取，积分获取方法请参阅积分获取办法", "limit": "单次最大5000行，总量不限制权限：用户需5000积分可调取，积分获取方法请参阅积分获取办法", "desc": "按三级分类提取中信行业成分，可提供某个分类的所有成分，也可按股票代码提取所属分类，参数灵活限量：单次最大5000行，总量不限制权限：用户需5000积分可调取，积分获取方法请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=373", "is_separate": false}, {"id": "j1_149", "category": "指数专题", "title": "中信行业指数行情", "interfaceName": "ci_daily", "permissionText": "积分：5000积分可调取，可通过指数代码和日期参数循环获取所有数据", "limit": "单次最大4000条，可循环提取积分：5000积分可调取，可通过指数代码和日期参数循环获取所有数据", "desc": "获取中信行业指数日线行情限量：单次最大4000条，可循环提取积分：5000积分可调取，可通过指数代码和日期参数循环获取所有数据", "points": 5000, "href": "/document/2?doc_id=308", "is_separate": false}, {"id": "j1_150", "category": "指数专题", "title": "国际指数", "interfaceName": "index_global", "permissionText": "积分：用户积6000积分可调取，积分越高频次越高，请自行提高积分，具体请参阅积分获取办法", "limit": "单次最大提取4000行情数据，可循环获取，总量不限制积分：用户积6000积分可调取，积分越高频次越高，请自行提高积分，具体请参阅积分获取办法", "desc": "获取国际主要指数日线行情限量：单次最大提取4000行情数据，可循环获取，总量不限制积分：用户积6000积分可调取，积分越高频次越高，请自行提高积分，具体请参阅积分获取办法", "points": 6000, "href": "/document/2?doc_id=211", "is_separate": false}, {"id": "j1_151", "category": "指数专题", "title": "指数技术因子(专业版)", "interfaceName": "idx_factor_pro", "permissionText": "积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次", "limit": "单次最大8000积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次", "desc": "获取指数每日技术面因子数据，用于跟踪指数当前走势情况，数据由Tushare社区自产，覆盖全历史；输出参数_bfq表示不复权描述中说明了因子的默认传参，如需要特殊参数或者更多因子可以联系管理员评估，指数包括大盘指数 申万行业指数 中信指数限量：单次最大8000积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次", "points": 5000, "href": "/document/2?doc_id=358", "is_separate": false}, {"id": "j1_151", "category": "指数专题", "title": "指数技术因子(专业版)", "interfaceName": "idx_factor_pro", "permissionText": "积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次", "limit": "单次最大8000积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次", "desc": "获取指数每日技术面因子数据，用于跟踪指数当前走势情况，数据由Tushare社区自产，覆盖全历史；输出参数_bfq表示不复权描述中说明了因子的默认传参，如需要特殊参数或者更多因子可以联系管理员评估，指数包括大盘指数 申万行业指数 中信指数限量：单次最大8000积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次", "points": 8000, "href": "/document/2?doc_id=358", "is_separate": false}, {"id": "j1_152", "category": "指数专题", "title": "市场交易统计", "interfaceName": "daily_info", "permissionText": "权限：用户积600积分可调取， 频次有限制，积分越高每分钟调取频次越高，5000积分以上频次相对较高，积分获取方法请参阅积分获取办法", "limit": "单次最大4000，可循环获取，总量不限制权限：用户积600积分可调取， 频次有限制，积分越高每分钟调取频次越高，5000积分以上频次相对较高，积分获取方法请参阅积分获取办法", "desc": "获取交易所股票交易统计，包括各板块明细限量：单次最大4000，可循环获取，总量不限制权限：用户积600积分可调取， 频次有限制，积分越高每分钟调取频次越高，5000积分以上频次相对较高，积分获取方法请参阅积分获取办法", "points": 600, "href": "/document/2?doc_id=215", "is_separate": false}, {"id": "j1_152", "category": "指数专题", "title": "市场交易统计", "interfaceName": "daily_info", "permissionText": "权限：用户积600积分可调取， 频次有限制，积分越高每分钟调取频次越高，5000积分以上频次相对较高，积分获取方法请参阅积分获取办法", "limit": "单次最大4000，可循环获取，总量不限制权限：用户积600积分可调取， 频次有限制，积分越高每分钟调取频次越高，5000积分以上频次相对较高，积分获取方法请参阅积分获取办法", "desc": "获取交易所股票交易统计，包括各板块明细限量：单次最大4000，可循环获取，总量不限制权限：用户积600积分可调取， 频次有限制，积分越高每分钟调取频次越高，5000积分以上频次相对较高，积分获取方法请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=215", "is_separate": false}, {"id": "j1_153", "category": "指数专题", "title": "深圳市场每日交易概况", "interfaceName": "sz_daily_info", "permissionText": "权限：用户积2000积分可调取， 频次有限制，积分越高每分钟调取频次越高，5000积分以上频次相对较高，积分获取方法请参阅积分获取办法", "limit": "单次最大2000，可循环获取，总量不限制权限：用户积2000积分可调取， 频次有限制，积分越高每分钟调取频次越高，5000积分以上频次相对较高，积分获取方法请参阅积分获取办法", "desc": "获取深圳市场每日交易概况限量：单次最大2000，可循环获取，总量不限制权限：用户积2000积分可调取， 频次有限制，积分越高每分钟调取频次越高，5000积分以上频次相对较高，积分获取方法请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=268", "is_separate": false}, {"id": "j1_153", "category": "指数专题", "title": "深圳市场每日交易概况", "interfaceName": "sz_daily_info", "permissionText": "权限：用户积2000积分可调取， 频次有限制，积分越高每分钟调取频次越高，5000积分以上频次相对较高，积分获取方法请参阅积分获取办法", "limit": "单次最大2000，可循环获取，总量不限制权限：用户积2000积分可调取， 频次有限制，积分越高每分钟调取频次越高，5000积分以上频次相对较高，积分获取方法请参阅积分获取办法", "desc": "获取深圳市场每日交易概况限量：单次最大2000，可循环获取，总量不限制权限：用户积2000积分可调取， 频次有限制，积分越高每分钟调取频次越高，5000积分以上频次相对较高，积分获取方法请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=268", "is_separate": false}, {"id": "j1_155", "category": "公募基金", "title": "公募基金列表", "interfaceName": "fund_basic", "permissionText": "积分：用户需要2000积分才可以调取，单次最大可以提取15000条数据，5000积分以上权限更高，具体请参阅积分获取办法", "limit": "", "desc": "获取公募基金数据列表，包括场内和场外基金积分：用户需要2000积分才可以调取，单次最大可以提取15000条数据，5000积分以上权限更高，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=19", "is_separate": false}, {"id": "j1_155", "category": "公募基金", "title": "公募基金列表", "interfaceName": "fund_basic", "permissionText": "积分：用户需要2000积分才可以调取，单次最大可以提取15000条数据，5000积分以上权限更高，具体请参阅积分获取办法", "limit": "", "desc": "获取公募基金数据列表，包括场内和场外基金积分：用户需要2000积分才可以调取，单次最大可以提取15000条数据，5000积分以上权限更高，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=19", "is_separate": false}, {"id": "j1_156", "category": "公募基金", "title": "公募基金公司", "interfaceName": "fund_company", "permissionText": "积分：用户需要1500积分才可以调取，一次可以提取全部数据。具体请参阅积分获取办法", "limit": "", "desc": "获取公募基金管理人列表", "points": 1500, "href": "/document/2?doc_id=118", "is_separate": false}, {"id": "j1_157", "category": "公募基金", "title": "基金经理", "interfaceName": "fund_manager", "permissionText": "积分：用户有500积分可获取数据，2000积分以上可以提高访问频次", "limit": "单次最大5000，支持分页提取数据", "desc": "获取公募基金经理数据，包括基金经理简历等数据", "points": 500, "href": "/document/2?doc_id=208", "is_separate": false}, {"id": "j1_157", "category": "公募基金", "title": "基金经理", "interfaceName": "fund_manager", "permissionText": "积分：用户有500积分可获取数据，2000积分以上可以提高访问频次", "limit": "单次最大5000，支持分页提取数据", "desc": "获取公募基金经理数据，包括基金经理简历等数据", "points": 2000, "href": "/document/2?doc_id=208", "is_separate": false}, {"id": "j1_158", "category": "公募基金", "title": "公募基金业绩基准库", "interfaceName": "mkt_idx_bmk", "permissionText": "积分：需要5000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大500条，单次可以提取全部列表", "desc": "获取官方发布的ETF业绩比较基准列表信息，分为一类库、二类库", "points": 5000, "href": "/document/2?doc_id=462", "is_separate": false}, {"id": "j1_159", "category": "公募基金", "title": "基金规模数据", "interfaceName": "fund_share", "permissionText": "积分：用户需要至少2000积分可以调取，5000积分以上频次较高，具体请参阅积分获取办法", "limit": "单次最大提取2000行数据积分：用户需要至少2000积分可以调取，5000积分以上频次较高，具体请参阅积分获取办法", "desc": "获取基金规模数据，包含上海和深圳ETF基金限量：单次最大提取2000行数据积分：用户需要至少2000积分可以调取，5000积分以上频次较高，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=207", "is_separate": false}, {"id": "j1_159", "category": "公募基金", "title": "基金规模数据", "interfaceName": "fund_share", "permissionText": "积分：用户需要至少2000积分可以调取，5000积分以上频次较高，具体请参阅积分获取办法", "limit": "单次最大提取2000行数据积分：用户需要至少2000积分可以调取，5000积分以上频次较高，具体请参阅积分获取办法", "desc": "获取基金规模数据，包含上海和深圳ETF基金限量：单次最大提取2000行数据积分：用户需要至少2000积分可以调取，5000积分以上频次较高，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=207", "is_separate": false}, {"id": "j1_160", "category": "公募基金", "title": "公募基金净值", "interfaceName": "fund_nav", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取公募基金净值数据积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=119", "is_separate": false}, {"id": "j1_161", "category": "公募基金", "title": "公募基金分红", "interfaceName": "fund_div", "permissionText": "积分：用户需要至少400积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取公募基金分红数据积分：用户需要至少400积分才可以调取，具体请参阅积分获取办法", "points": 400, "href": "/document/2?doc_id=120", "is_separate": false}, {"id": "j1_162", "category": "公募基金", "title": "公募基金持仓数据", "interfaceName": "fund_portfolio", "permissionText": "积分：5000积分以上每分钟请求200次，8000积分以上每分钟请求500次，具体请参阅积分获取办法", "limit": "", "desc": "获取公募基金持仓数据，季度更新积分：5000积分以上每分钟请求200次，8000积分以上每分钟请求500次，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=121", "is_separate": false}, {"id": "j1_162", "category": "公募基金", "title": "公募基金持仓数据", "interfaceName": "fund_portfolio", "permissionText": "积分：5000积分以上每分钟请求200次，8000积分以上每分钟请求500次，具体请参阅积分获取办法", "limit": "", "desc": "获取公募基金持仓数据，季度更新积分：5000积分以上每分钟请求200次，8000积分以上每分钟请求500次，具体请参阅积分获取办法", "points": 8000, "href": "/document/2?doc_id=121", "is_separate": false}, {"id": "j1_163", "category": "公募基金", "title": "场内基金技术因子(专业版)", "interfaceName": "fund_factor_pro", "permissionText": "积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次", "limit": "单次最大8000积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次", "desc": "获取场内基金每日技术面因子数据，用于跟踪场内基金当前走势情况，数据由Tushare社区自产，覆盖全历史；输出参数_bfq表示不复权，描述中说明了因子的默认传参，如需要特殊参数或者更多因子可以联系管理员评估限量：单次最大8000积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次", "points": 5000, "href": "/document/2?doc_id=359", "is_separate": false}, {"id": "j1_163", "category": "公募基金", "title": "场内基金技术因子(专业版)", "interfaceName": "fund_factor_pro", "permissionText": "积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次", "limit": "单次最大8000积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次", "desc": "获取场内基金每日技术面因子数据，用于跟踪场内基金当前走势情况，数据由Tushare社区自产，覆盖全历史；输出参数_bfq表示不复权，描述中说明了因子的默认传参，如需要特殊参数或者更多因子可以联系管理员评估限量：单次最大8000积分：5000积分每分钟可以请求30次，8000积分以上每分钟500次", "points": 8000, "href": "/document/2?doc_id=359", "is_separate": false}, {"id": "j1_165", "category": "期货数据", "title": "期货合约信息表", "interfaceName": "fut_basic", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大10000积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "desc": "获取期货合约列表数据限量：单次最大10000积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=135", "is_separate": false}, {"id": "j1_165", "category": "期货数据", "title": "期货合约信息表", "interfaceName": "fut_basic", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大10000积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "desc": "获取期货合约列表数据限量：单次最大10000积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "points": 10000, "href": "/document/2?doc_id=135", "is_separate": false}, {"id": "j1_166", "category": "期货数据", "title": "交易日历", "interfaceName": "fut_trade_cal", "permissionText": "积分：需2000积分才可以提取数据", "limit": "", "desc": "获取各大期货交易所交易日历数据", "points": 2000, "href": "/document/2?doc_id=467", "is_separate": false}, {"id": "j1_167", "category": "期货数据", "title": "期货日线行情", "interfaceName": "fut_daily", "permissionText": "积分：用户需要至少2000积分才可以调取，未来可能调整积分，请尽量多的积累积分。具体请参阅积分获取办法", "limit": "单次最大2000条，总量不限制积分：用户需要至少2000积分才可以调取，未来可能调整积分，请尽量多的积累积分。具体请参阅积分获取办法", "desc": "期货日线行情数据限量：单次最大2000条，总量不限制积分：用户需要至少2000积分才可以调取，未来可能调整积分，请尽量多的积累积分。具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=138", "is_separate": false}, {"id": "j1_168", "category": "期货数据", "title": "期货周/月线行情(每日更新)", "interfaceName": "fut_weekly_monthly", "permissionText": "", "limit": "单次最大6000", "desc": "期货周/月线行情(每日更新)限量：单次最大6000", "points": null, "href": "/document/2?doc_id=337", "is_separate": true}, {"id": "j1_169", "category": "期货数据", "title": "期货历史分钟行情", "interfaceName": "ft_mins", "permissionText": "积分）获取对应的合约代码后提取分钟。", "limit": "单次最大8000行数据，可以通过期货合约代码和时间循环获取，本接口可以提供超过10年历史分钟数据。", "desc": "获取全市场期货合约分钟数据，支持1min/5min/15min/30min/60min行情，提供Python SDK和 http Restful API两种方式，如果需要主力合约分钟，请先通过主力mapping接口（需要有至少2000积分）获取对应的合约代码后提取分钟。", "points": 2000, "href": "/document/2?doc_id=313", "is_separate": false}, {"id": "j1_170", "category": "期货数据", "title": "期货实时分钟行情", "interfaceName": "rt_fut_min", "permissionText": "权限：需单独开权限，正式权限请参阅 权限说明  。", "limit": "每分钟可以请求500次，支持多个合约同时提取权限：需单独开权限，正式权限请参阅 权限说明  。", "desc": "获取全市场期货合约实时分钟数据，支持1min/5min/15min/30min/60min行情，提供Python SDK、 http Restful API和websocket三种方式，如果需要主力合约分钟，请先通过主力mapping接口获取对应的合约代码后提取分钟。限量：每分钟可以请求500次，支持多个合约同时提取权限：需单独开权限，正式权限请参阅 权限说明  。", "points": null, "href": "/document/2?doc_id=340", "is_separate": true}, {"id": "j1_171", "category": "期货数据", "title": "仓单日报", "interfaceName": "fut_wsr", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大1000，总量不限制积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "desc": "获取仓单日报数据，了解各仓库/厂库的仓单变化限量：单次最大1000，总量不限制积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=140", "is_separate": false}, {"id": "j1_172", "category": "期货数据", "title": "结算参数", "interfaceName": "fut_settle", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大返回1600行数据，可根据日期循环，总量不限制积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "desc": "获取每日结算参数数据，包括交易和交割费率等限量：单次最大返回1600行数据，可根据日期循环，总量不限制积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=141", "is_separate": false}, {"id": "j1_173", "category": "期货数据", "title": "期货Tick行情数据", "interfaceName": "", "permissionText": "积分权限范畴，有需求的用户请微信联系：waditu_a ，联系时请注明期货tick数据。", "limit": "", "desc": "", "points": null, "href": "/document/2?doc_id=314", "is_separate": true}, {"id": "j1_174", "category": "期货数据", "title": "每日成交持仓排名", "interfaceName": "fut_holding", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大2000，总量不限制", "desc": "获取每日成交持仓排名数据，注意\"上期所\"涵盖\"上海国际能源交易中心\"合约数据", "points": 2000, "href": "/document/2?doc_id=139", "is_separate": false}, {"id": "j1_175", "category": "期货数据", "title": "南华期货指数日线行情", "interfaceName": "fut_index_daily", "permissionText": "权限：用户需要累积2000积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取南华指数每日行情，指数行情也可以通过通用行情接口获取数据．", "points": 2000, "href": "/document/2?doc_id=468", "is_separate": false}, {"id": "j1_176", "category": "期货数据", "title": "期货主力与连续合约", "interfaceName": "fut_mapping", "permissionText": "积分：用户需要至少2000积分才可以调取，未来可能调整积分，请尽可能多积累积分。具体请参阅积分获取办法", "limit": "单次最大2000条，总量不限制积分：用户需要至少2000积分才可以调取，未来可能调整积分，请尽可能多积累积分。具体请参阅积分获取办法", "desc": "获取期货主力（或连续）合约与月合约映射数据限量：单次最大2000条，总量不限制积分：用户需要至少2000积分才可以调取，未来可能调整积分，请尽可能多积累积分。具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=189", "is_separate": false}, {"id": "j1_177", "category": "期货数据", "title": "期货主要品种交易周报", "interfaceName": "fut_weekly_detail", "permissionText": "权限：600积分可调取，单次最大获取4000行数据，积分越高频次越高，5000积分以上正常调取不受限制数据来源：中国证监会，本数据由Tushare社区成员CE完成规划和采集", "limit": "", "desc": "获取期货交易所主要品种每周交易统计信息，数据从2010年3月开始权限：600积分可调取，单次最大获取4000行数据，积分越高频次越高，5000积分以上正常调取不受限制数据来源：中国证监会，本数据由Tushare社区成员CE完成规划和采集", "points": 600, "href": "/document/2?doc_id=216", "is_separate": false}, {"id": "j1_177", "category": "期货数据", "title": "期货主要品种交易周报", "interfaceName": "fut_weekly_detail", "permissionText": "权限：600积分可调取，单次最大获取4000行数据，积分越高频次越高，5000积分以上正常调取不受限制数据来源：中国证监会，本数据由Tushare社区成员CE完成规划和采集", "limit": "", "desc": "获取期货交易所主要品种每周交易统计信息，数据从2010年3月开始权限：600积分可调取，单次最大获取4000行数据，积分越高频次越高，5000积分以上正常调取不受限制数据来源：中国证监会，本数据由Tushare社区成员CE完成规划和采集", "points": 5000, "href": "/document/2?doc_id=216", "is_separate": false}, {"id": "j1_178", "category": "期货数据", "title": "期货合约涨跌停价格（盘前）", "interfaceName": "ft_limit", "permissionText": "积分：用户积5000积分可调取，积分获取方法具体请参阅积分获取办法", "limit": "单次最大获取4000行数据，可以通过日期、合约代码等参数循环获取所有历史积分：用户积5000积分可调取，积分获取方法具体请参阅积分获取办法", "desc": "获取所有期货合约每天的涨跌停价格及最低保证金率，数据开始于2005年。限量：单次最大获取4000行数据，可以通过日期、合约代码等参数循环获取所有历史积分：用户积5000积分可调取，积分获取方法具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=368", "is_separate": false}, {"id": "j1_180", "category": "现货数据", "title": "黄金现货基础信息", "interfaceName": "sge_basic", "permissionText": "积分：用户积5000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大100条，当前现货合约数不足20个，可以一次提取全部，不需要循环提取积分：用户积5000积分可以调取，具体请参阅积分获取办法", "desc": "获取上海黄金交易所现货合约基础信息限量：单次最大100条，当前现货合约数不足20个，可以一次提取全部，不需要循环提取积分：用户积5000积分可以调取，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=284", "is_separate": false}, {"id": "j1_181", "category": "现货数据", "title": "现货黄金日行情", "interfaceName": "sge_daily", "permissionText": "积分：用户积2000积分可调取，具体请参阅积分获取办法", "limit": "单次最大2000，可循环或者分页提取积分：用户积2000积分可调取，具体请参阅积分获取办法", "desc": "获取上海黄金交易所现货合约日线行情限量：单次最大2000，可循环或者分页提取积分：用户积2000积分可调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=285", "is_separate": false}, {"id": "j1_183", "category": "期权数据", "title": "期权合约信息", "interfaceName": "opt_basic", "permissionText": "积分：用户需要至少5000积分可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取期权合约信息", "points": 5000, "href": "/document/2?doc_id=158", "is_separate": false}, {"id": "j1_184", "category": "期权数据", "title": "期权日线行情", "interfaceName": "opt_daily", "permissionText": "积分：用户需要至少2000积分才可以调取，但有流量控制，请自行提高积分，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大15000条数据，可跟进日线或者代码循环，总量不限制积分：用户需要至少2000积分才可以调取，但有流量控制，请自行提高积分，积分越多权限越大，具体请参阅积分获取办法", "desc": "获取期权日线行情限量：单次最大15000条数据，可跟进日线或者代码循环，总量不限制积分：用户需要至少2000积分才可以调取，但有流量控制，请自行提高积分，积分越多权限越大，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=159", "is_separate": false}, {"id": "j1_185", "category": "期权数据", "title": "期权历史分钟行情", "interfaceName": "opt_mins", "permissionText": "权限：120积分可以调取2次接口查看数据，正式权限请参阅 权限说明  。", "limit": "单次最大8000行数据，可以通过合约代码和时间循环获取。权限：120积分可以调取2次接口查看数据，正式权限请参阅 权限说明  。", "desc": "获取全市场期权合约分钟数据，支持1min/5min/15min/30min/60min行情，提供Python SDK和 http Restful API两种方式。限量：单次最大8000行数据，可以通过合约代码和时间循环获取。权限：120积分可以调取2次接口查看数据，正式权限请参阅 权限说明  。", "points": 120, "href": "/document/2?doc_id=341", "is_separate": false}, {"id": "j1_187", "category": "债券专题", "title": "可转债基本信息", "interfaceName": "cb_basic", "permissionText": "权限：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大2000，总量不限制", "desc": "获取可转债基本信息", "points": 2000, "href": "/document/2?doc_id=185", "is_separate": false}, {"id": "j1_187", "category": "债券专题", "title": "可转债基本信息", "interfaceName": "cb_basic", "permissionText": "权限：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大2000，总量不限制", "desc": "获取可转债基本信息", "points": 5000, "href": "/document/2?doc_id=185", "is_separate": false}, {"id": "j1_188", "category": "债券专题", "title": "可转债发行", "interfaceName": "cb_issue", "permissionText": "积分：用户需要至少2000积分才可以调取，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大2000，可多次提取，总量不限制积分：用户需要至少2000积分才可以调取，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "desc": "获取可转债发行数据限量：单次最大2000，可多次提取，总量不限制积分：用户需要至少2000积分才可以调取，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=186", "is_separate": false}, {"id": "j1_188", "category": "债券专题", "title": "可转债发行", "interfaceName": "cb_issue", "permissionText": "积分：用户需要至少2000积分才可以调取，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大2000，可多次提取，总量不限制积分：用户需要至少2000积分才可以调取，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "desc": "获取可转债发行数据限量：单次最大2000，可多次提取，总量不限制积分：用户需要至少2000积分才可以调取，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=186", "is_separate": false}, {"id": "j1_189", "category": "债券专题", "title": "可转债赎回信息", "interfaceName": "cb_call", "permissionText": "积分。", "limit": "单次最大2000条数据，可以根据日期循环提取，本接口需5000积分。", "desc": "获取可转债到期赎回、强制赎回等信息。数据来源于公开披露渠道，供个人和机构研究使用，请不要用于数据商业目的。限量：单次最大2000条数据，可以根据日期循环提取，本接口需5000积分。", "points": 5000, "href": "/document/2?doc_id=269", "is_separate": false}, {"id": "j1_190", "category": "债券专题", "title": "可转债票面利率", "interfaceName": "cb_rate", "permissionText": "权限：用户需要至少5000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大2000，总量不限制权限：用户需要至少5000积分才可以调取，具体请参阅积分获取办法", "desc": "获取可转债票面利率限量：单次最大2000，总量不限制权限：用户需要至少5000积分才可以调取，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=305", "is_separate": false}, {"id": "j1_191", "category": "债券专题", "title": "可转债行情", "interfaceName": "cb_daily", "permissionText": "积分：用户需要至少2000积分才可以调取，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大2000条，可多次提取，总量不限制积分：用户需要至少2000积分才可以调取，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "desc": "获取可转债行情限量：单次最大2000条，可多次提取，总量不限制积分：用户需要至少2000积分才可以调取，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=187", "is_separate": false}, {"id": "j1_191", "category": "债券专题", "title": "可转债行情", "interfaceName": "cb_daily", "permissionText": "积分：用户需要至少2000积分才可以调取，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大2000条，可多次提取，总量不限制积分：用户需要至少2000积分才可以调取，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "desc": "获取可转债行情限量：单次最大2000条，可多次提取，总量不限制积分：用户需要至少2000积分才可以调取，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=187", "is_separate": false}, {"id": "j1_192", "category": "债券专题", "title": "可转债十大持有人", "interfaceName": "top10_cb_holders", "permissionText": "积分：需要5000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大3000条，可根据代码或日期循环提取", "desc": "获取可转债前十大持有人", "points": 5000, "href": "/document/2?doc_id=459", "is_separate": false}, {"id": "j1_193", "category": "债券专题", "title": "可转债技术因子(专业版)", "interfaceName": "cb_factor_pro", "permissionText": "积分：8000积分以上每分钟500次，具体请参阅积分获取办法", "limit": "单次调取最多返回10000条数据，可以通过日期参数循环", "desc": "获取可转债每日技术面因子数据，用于跟踪可转债当前走势情况，数据由Tushare社区自产，覆盖全历史；输出参数_bfq表示不复权，_qfq表示前复权 _hfq表示后复权，描述中说明了因子的默认传参，如需要特殊参数或者更多因子可以联系管理员评估", "points": 8000, "href": "/document/2?doc_id=392", "is_separate": false}, {"id": "j1_194", "category": "债券专题", "title": "可转债转股价变动", "interfaceName": "cb_price_chg", "permissionText": "权限：本接口需单独开权限（跟积分没关系），具体请参阅积分获取办法", "limit": "单次最大2000，总量不限制权限：本接口需单独开权限（跟积分没关系），具体请参阅积分获取办法", "desc": "获取可转债转股价变动限量：单次最大2000，总量不限制权限：本接口需单独开权限（跟积分没关系），具体请参阅积分获取办法", "points": null, "href": "/document/2?doc_id=246", "is_separate": true}, {"id": "j1_195", "category": "债券专题", "title": "可转债转股结果", "interfaceName": "cb_share", "permissionText": "权限：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大2000，总量不限制权限：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "desc": "获取可转债转股结果限量：单次最大2000，总量不限制权限：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=247", "is_separate": false}, {"id": "j1_195", "category": "债券专题", "title": "可转债转股结果", "interfaceName": "cb_share", "permissionText": "权限：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大2000，总量不限制权限：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "desc": "获取可转债转股结果限量：单次最大2000，总量不限制权限：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=247", "is_separate": false}, {"id": "j1_196", "category": "债券专题", "title": "获取可转债评级历史记录", "interfaceName": "cb_rating", "permissionText": "积分：需要2000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大3000条，可根据代码或日期循环提取", "desc": "获取可转债评级历史记录", "points": 2000, "href": "/document/2?doc_id=458", "is_separate": false}, {"id": "j1_197", "category": "债券专题", "title": "债券回购日行情", "interfaceName": "repo_daily", "permissionText": "权限：用户需要累积2000积分才可以调取，具体请参阅积分获取办法", "limit": "单次最大2000条，可多次提取，总量不限制权限：用户需要累积2000积分才可以调取，具体请参阅积分获取办法", "desc": "债券回购日行情限量：单次最大2000条，可多次提取，总量不限制权限：用户需要累积2000积分才可以调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=256", "is_separate": false}, {"id": "j1_198", "category": "债券专题", "title": "柜台流通式债券报价", "interfaceName": "bc_otcqt", "permissionText": "积分：用户需要至少500积分可以试用调取，2000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大2000条，可多次提取，总量不限制积分：用户需要至少500积分可以试用调取，2000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "desc": "柜台流通式债券报价限量：单次最大2000条，可多次提取，总量不限制积分：用户需要至少500积分可以试用调取，2000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "points": 500, "href": "/document/2?doc_id=322", "is_separate": false}, {"id": "j1_198", "category": "债券专题", "title": "柜台流通式债券报价", "interfaceName": "bc_otcqt", "permissionText": "积分：用户需要至少500积分可以试用调取，2000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大2000条，可多次提取，总量不限制积分：用户需要至少500积分可以试用调取，2000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "desc": "柜台流通式债券报价限量：单次最大2000条，可多次提取，总量不限制积分：用户需要至少500积分可以试用调取，2000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=322", "is_separate": false}, {"id": "j1_199", "category": "债券专题", "title": "柜台流通式债券最优报价", "interfaceName": "bc_bestotcqt", "permissionText": "积分：用户需要至少500积分可以试用调取，2000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大2000，可多次提取，总量不限制积分：用户需要至少500积分可以试用调取，2000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "desc": "柜台流通式债券最优报价限量：单次最大2000，可多次提取，总量不限制积分：用户需要至少500积分可以试用调取，2000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "points": 500, "href": "/document/2?doc_id=323", "is_separate": false}, {"id": "j1_199", "category": "债券专题", "title": "柜台流通式债券最优报价", "interfaceName": "bc_bestotcqt", "permissionText": "积分：用户需要至少500积分可以试用调取，2000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大2000，可多次提取，总量不限制积分：用户需要至少500积分可以试用调取，2000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "desc": "柜台流通式债券最优报价限量：单次最大2000，可多次提取，总量不限制积分：用户需要至少500积分可以试用调取，2000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=323", "is_separate": false}, {"id": "j1_200", "category": "债券专题", "title": "债券大宗交易", "interfaceName": "bond_blk", "permissionText": "权限：用户满5000积分有数据权限，单次最大1000条，可根据日期循环提取，总量不限制", "limit": "", "desc": "获取沪深交易所债券大宗交易数据", "points": 5000, "href": "/document/2?doc_id=271", "is_separate": false}, {"id": "j1_201", "category": "债券专题", "title": "大宗交易明细", "interfaceName": "bond_blk_detail", "permissionText": "权限：用户满5000积分有数据权限，单次最大1000条，可根据日期循环提取，总量不限制", "limit": "", "desc": "获取沪深交易所债券大宗交易数据", "points": 5000, "href": "/document/2?doc_id=272", "is_separate": false}, {"id": "j1_202", "category": "债券专题", "title": "国债收益率曲线", "interfaceName": "yc_cb", "permissionText": "权限：属于单独的权限接口，请在群里联系群主或管理员", "limit": "单次最大2000，总量不限制，可循环提取权限：属于单独的权限接口，请在群里联系群主或管理员", "desc": "获取中债收益率曲线，目前可获取中债国债收益率曲线即期和到期收益率曲线数据限量：单次最大2000，总量不限制，可循环提取权限：属于单独的权限接口，请在群里联系群主或管理员", "points": null, "href": "/document/2?doc_id=201", "is_separate": true}, {"id": "j1_203", "category": "债券专题", "title": "财经日历", "interfaceName": "eco_cal", "permissionText": "积分：2000积分可调取", "limit": "单次最大获取100行数据积分：2000积分可调取", "desc": "获取全球财经日历、包括经济事件数据更新限量：单次最大获取100行数据积分：2000积分可调取", "points": 2000, "href": "/document/2?doc_id=233", "is_separate": false}, {"id": "j1_205", "category": "外汇数据", "title": "外汇基础信息（海外）", "interfaceName": "fx_obasic", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取海外外汇基础信息，目前只有FXCM交易商的数据", "points": 2000, "href": "/document/2?doc_id=178", "is_separate": false}, {"id": "j1_206", "category": "外汇数据", "title": "外汇日线行情", "interfaceName": "fx_daily", "permissionText": "积分：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大提取1000行记录，可多次提取，总量不限制积分：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "desc": "获取外汇日线行情限量：单次最大提取1000行记录，可多次提取，总量不限制积分：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=179", "is_separate": false}, {"id": "j1_206", "category": "外汇数据", "title": "外汇日线行情", "interfaceName": "fx_daily", "permissionText": "积分：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "limit": "单次最大提取1000行记录，可多次提取，总量不限制积分：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "desc": "获取外汇日线行情限量：单次最大提取1000行记录，可多次提取，总量不限制积分：用户需要至少2000积分才可以调取，但有流量控制，5000积分以上频次相对较高，积分越多权限越大，具体请参阅积分获取办法", "points": 5000, "href": "/document/2?doc_id=179", "is_separate": false}, {"id": "j1_208", "category": "港股数据", "title": "港股列表", "interfaceName": "hk_basic", "permissionText": "积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "limit": "", "desc": "获取港股列表信息数量：单次可提取全部在交易的港股列表数据积分：用户需要至少2000积分才可以调取，具体请参阅积分获取办法", "points": 2000, "href": "/document/2?doc_id=191", "is_separate": false}, {"id": "j1_209", "category": "港股数据", "title": "港股交易日历", "interfaceName": "hk_tradecal", "permissionText": "权限：用户积累2000积分才可调取", "limit": "单次最大2000权限：用户积累2000积分才可调取", "desc": "获取交易日历限量：单次最大2000权限：用户积累2000积分才可调取", "points": 2000, "href": "/document/2?doc_id=250", "is_separate": false}, {"id": "j1_210", "category": "港股数据", "title": "港股行情", "interfaceName": "hk_daily", "permissionText": "积分：本接口单独开权限，具体请参阅权限说明", "limit": "单次最大提取5000行记录，可多次提取，总量不限制积分：本接口单独开权限，具体请参阅权限说明", "desc": "获取港股每日增量和历史行情，每日18点左右更新当日数据限量：单次最大提取5000行记录，可多次提取，总量不限制积分：本接口单独开权限，具体请参阅权限说明", "points": null, "href": "/document/2?doc_id=192", "is_separate": true}, {"id": "j1_211", "category": "港股数据", "title": "港股复权行情", "interfaceName": "hk_daily_adj", "permissionText": "积分可以试用查看数据，开通正式权限请参考权限说明文档", "limit": "单次最大可以提取6000条数据，可循环获取全部，支持分页提取要求：120积分可以试用查看数据，开通正式权限请参考权限说明文档", "desc": "获取港股复权行情，提供股票股本、市值和成交及换手多个数据指标限量：单次最大可以提取6000条数据，可循环获取全部，支持分页提取要求：120积分可以试用查看数据，开通正式权限请参考权限说明文档", "points": 120, "href": "/document/2?doc_id=339", "is_separate": false}, {"id": "j1_212", "category": "港股数据", "title": "港股复权因子", "interfaceName": "hk_adjfactor", "permissionText": "权限：本接口是在开通港股日线权限后自动获取权限，权限请参考权限说明文档", "limit": "单次最大6000行数据，可以根据日期循环权限：本接口是在开通港股日线权限后自动获取权限，权限请参考权限说明文档", "desc": "获取港股每日复权因子数据，每天滚动刷新限量：单次最大6000行数据，可以根据日期循环权限：本接口是在开通港股日线权限后自动获取权限，权限请参考权限说明文档", "points": null, "href": "/document/2?doc_id=401", "is_separate": true}, {"id": "j1_213", "category": "港股数据", "title": "港股分钟行情", "interfaceName": "hk_mins", "permissionText": "权限：120积分可以调取2次接口查看数据，正式权限请参阅 权限说明  。", "limit": "单次最大8000行数据，可以通过股票代码和日期循环获取权限：120积分可以调取2次接口查看数据，正式权限请参阅 权限说明  。", "desc": "港股分钟数据，支持1min/5min/15min/30min/60min行情，提供Python SDK和 http Restful API两种方式限量：单次最大8000行数据，可以通过股票代码和日期循环获取权限：120积分可以调取2次接口查看数据，正式权限请参阅 权限说明  。", "points": 120, "href": "/document/2?doc_id=304", "is_separate": false}, {"id": "j1_214", "category": "港股数据", "title": "港股实时日线", "interfaceName": "rt_hk_k", "permissionText": "积分：本接口是单独开权限的数据，单独申请权限请参考权限列表", "limit": "单次最大可提取5000条数据积分：本接口是单独开权限的数据，单独申请权限请参考权限列表", "desc": "获取港股实时日k线行情，支持按股票代码及股票代码通配符一次性提取全部股票实时日k线行情限量：单次最大可提取5000条数据积分：本接口是单独开权限的数据，单独申请权限请参考权限列表", "points": null, "href": "/document/2?doc_id=383", "is_separate": true}, {"id": "j1_215", "category": "港股数据", "title": "港股利润表", "interfaceName": "hk_income", "permissionText": "权限：需单独开权限，具体权限信息请参考权限列表", "limit": "", "desc": "获取港股上市公司财务利润表数据", "points": null, "href": "/document/2?doc_id=389", "is_separate": true}, {"id": "j1_216", "category": "港股数据", "title": "港股资产负债表", "interfaceName": "hk_balancesheet", "permissionText": "权限：需单独开权限，具体权限信息请参考权限列表", "limit": "", "desc": "获取港股上市公司资产负债表", "points": null, "href": "/document/2?doc_id=390", "is_separate": true}, {"id": "j1_217", "category": "港股数据", "title": "港股现金流量表", "interfaceName": "hk_cashflow", "permissionText": "权限：需单独开权限，具体权限信息请参考权限列表", "limit": "", "desc": "获取港股上市公司现金流量表数据", "points": null, "href": "/document/2?doc_id=391", "is_separate": true}, {"id": "j1_218", "category": "港股数据", "title": "港股财务指标数据", "interfaceName": "hk_fina_indicator", "permissionText": "权限：需单独开权限，具体权限信息请参考权限列表", "limit": "", "desc": "获取港股上市公司财务指标数据，为避免服务器压力，现阶段每次请求最多返回200条记录，可通过设置日期多次请求获取更多数据。", "points": null, "href": "/document/2?doc_id=388", "is_separate": true}, {"id": "j1_220", "category": "美股数据", "title": "美股列表", "interfaceName": "us_basic", "permissionText": "积分：120积分可以试用，5000积分有正式权限", "limit": "单次最大6000，可分页提取积分：120积分可以试用，5000积分有正式权限", "desc": "获取美股列表信息限量：单次最大6000，可分页提取积分：120积分可以试用，5000积分有正式权限", "points": 120, "href": "/document/2?doc_id=252", "is_separate": false}, {"id": "j1_220", "category": "美股数据", "title": "美股列表", "interfaceName": "us_basic", "permissionText": "积分：120积分可以试用，5000积分有正式权限", "limit": "单次最大6000，可分页提取积分：120积分可以试用，5000积分有正式权限", "desc": "获取美股列表信息限量：单次最大6000，可分页提取积分：120积分可以试用，5000积分有正式权限", "points": 5000, "href": "/document/2?doc_id=252", "is_separate": false}, {"id": "j1_221", "category": "美股数据", "title": "美股交易日历", "interfaceName": "us_tradecal", "permissionText": "", "limit": "单次最大6000，可根据日期阶段获取", "desc": "获取美股交易日历信息限量：单次最大6000，可根据日期阶段获取", "points": null, "href": "/document/2?doc_id=253", "is_separate": true}, {"id": "j1_222", "category": "美股数据", "title": "美股行情", "interfaceName": "us_daily", "permissionText": "权限后也可支持分页提取全部历史要求：120积分可以试用查看数据，开通正式权限请参考权限说明文档。", "limit": "单次最大6000行数据，可根据日期参数循环提取，开通正式权限后也可支持分页提取全部历史要求：120积分可以试用查看数据，开通正式权限请参考权限说明文档。", "desc": "获取美股行情（未复权），包括全部股票全历史行情，以及重要的市场和估值指标限量：单次最大6000行数据，可根据日期参数循环提取，开通正式权限后也可支持分页提取全部历史要求：120积分可以试用查看数据，开通正式权限请参考权限说明文档。", "points": 120, "href": "/document/2?doc_id=254", "is_separate": false}, {"id": "j1_223", "category": "美股数据", "title": "美股复权行情", "interfaceName": "us_daily_adj", "permissionText": "积分可以试用查看数据，开通正式权限请参考权限说明文档", "limit": "单次最大可以提取8000条数据，可循环获取全部，支持分页提取要求：120积分可以试用查看数据，开通正式权限请参考权限说明文档", "desc": "获取美股复权行情，支持美股全市场股票，提供股本、市值、复权因子和成交信息等多个数据指标限量：单次最大可以提取8000条数据，可循环获取全部，支持分页提取要求：120积分可以试用查看数据，开通正式权限请参考权限说明文档", "points": 120, "href": "/document/2?doc_id=338", "is_separate": false}, {"id": "j1_224", "category": "美股数据", "title": "美股复权因子", "interfaceName": "us_adjfactor", "permissionText": "权限：本接口是在开通美股日线权限后自动获取权限，权限请参考权限说明文档", "limit": "单次最大15000行数据，可以根据日期循环权限：本接口是在开通美股日线权限后自动获取权限，权限请参考权限说明文档", "desc": "获取美股每日复权因子数据，在每天美股收盘后滚动刷新限量：单次最大15000行数据，可以根据日期循环权限：本接口是在开通美股日线权限后自动获取权限，权限请参考权限说明文档", "points": null, "href": "/document/2?doc_id=402", "is_separate": true}, {"id": "j1_225", "category": "美股数据", "title": "美股利润表", "interfaceName": "us_income", "permissionText": "权限：需单独开权限，具体权限信息请参考权限列表", "limit": "", "desc": "获取美股上市公司财务利润表数据（目前只覆盖主要美股和中概股）", "points": null, "href": "/document/2?doc_id=394", "is_separate": true}, {"id": "j1_226", "category": "美股数据", "title": "美股资产负债表", "interfaceName": "us_balancesheet", "permissionText": "权限：需单独开权限，具体权限信息请参考权限列表", "limit": "", "desc": "获取美股上市公司资产负债表（目前只覆盖主要美股和中概股）", "points": null, "href": "/document/2?doc_id=395", "is_separate": true}, {"id": "j1_227", "category": "美股数据", "title": "美股现金流量表", "interfaceName": "us_cashflow", "permissionText": "权限：需单独开权限，具体权限信息请参考权限列表", "limit": "", "desc": "获取美股上市公司现金流量表数据（目前只覆盖主要美股和中概股）", "points": null, "href": "/document/2?doc_id=396", "is_separate": true}, {"id": "j1_228", "category": "美股数据", "title": "美股财务指标数据", "interfaceName": "us_fina_indicator", "permissionText": "权限：需单独开权限，具体权限信息请参考权限列表", "limit": "", "desc": "获取美股上市公司财务指标数据，目前只覆盖主要美股和中概股。为避免服务器压力，现阶段每次请求最多返回200条记录，可通过设置日期多次请求获取更多数据。", "points": null, "href": "/document/2?doc_id=393", "is_separate": true}, {"id": "j1_231", "category": "宏观经济 / 国内宏观", "title": "中国经济数据发布日程", "interfaceName": "cn_schedule", "permissionText": "积分：需要2000积分可以调取，具体请参阅积分获取办法", "limit": "单次最大3000条，可根据代码或日期循环提取", "desc": "获取国家统计局、中国人民银行等经济数据发布日程及对应tushare接口，持续更新中", "points": 2000, "href": "/document/2?doc_id=461", "is_separate": false}, {"id": "j1_233", "category": "宏观经济 / 国内宏观 / 利率数据", "title": "Shibor利率数据", "interfaceName": "shibor", "permissionText": "积分：用户积累120积分可以调取，具体请参阅积分获取办法", "limit": "单次最大2000，总量不限制，可通过设置开始和结束日期分段获取积分：用户积累120积分可以调取，具体请参阅积分获取办法", "desc": "shibor利率限量：单次最大2000，总量不限制，可通过设置开始和结束日期分段获取积分：用户积累120积分可以调取，具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=149", "is_separate": false}, {"id": "j1_234", "category": "宏观经济 / 国内宏观 / 利率数据", "title": "Shibor报价数据", "interfaceName": "shibor_quote", "permissionText": "积分：用户积累120积分可以调取，具体请参阅积分获取办法", "limit": "单次最大4000行数据，总量不限制，可通过设置开始和结束日期分段获取积分：用户积累120积分可以调取，具体请参阅积分获取办法", "desc": "Shibor报价数据限量：单次最大4000行数据，总量不限制，可通过设置开始和结束日期分段获取积分：用户积累120积分可以调取，具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=150", "is_separate": false}, {"id": "j1_235", "category": "宏观经济 / 国内宏观 / 利率数据", "title": "LPR贷款基础利率", "interfaceName": "shibor_lpr", "permissionText": "积分：用户积累120积分可以调取，具体请参阅积分获取办法", "limit": "单次最大4000(相当于单次可提取18年历史)，总量不限制，可通过设置开始和结束日期分段获取积分：用户积累120积分可以调取，具体请参阅积分获取办法", "desc": "LPR贷款基础利率限量：单次最大4000(相当于单次可提取18年历史)，总量不限制，可通过设置开始和结束日期分段获取积分：用户积累120积分可以调取，具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=151", "is_separate": false}, {"id": "j1_236", "category": "宏观经济 / 国内宏观 / 利率数据", "title": "Libor拆借利率", "interfaceName": "libor", "permissionText": "积分：用户积累120积分可以调取，具体请参阅积分获取办法", "limit": "单次最大4000行数据，总量不限制，可通过设置开始和结束日期分段获取积分：用户积累120积分可以调取，具体请参阅积分获取办法", "desc": "Libor拆借利率限量：单次最大4000行数据，总量不限制，可通过设置开始和结束日期分段获取积分：用户积累120积分可以调取，具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=152", "is_separate": false}, {"id": "j1_237", "category": "宏观经济 / 国内宏观 / 利率数据", "title": "Hibor利率", "interfaceName": "hibor", "permissionText": "积分：用户积累120积分可以调取，具体请参阅积分获取办法", "limit": "单次最大4000行数据，总量不限制，可通过设置开始和结束日期分段获取积分：用户积累120积分可以调取，具体请参阅积分获取办法", "desc": "Hibor利率限量：单次最大4000行数据，总量不限制，可通过设置开始和结束日期分段获取积分：用户积累120积分可以调取，具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=153", "is_separate": false}, {"id": "j1_238", "category": "宏观经济 / 国内宏观 / 利率数据", "title": "温州民间借贷利率", "interfaceName": "wz_index", "permissionText": "积分：用户需要积攒2000积分可调取，具体请参阅积分获取办法数据来源：温州指数网注：温州指数 ，即温州民间融资综合利率指数，该指数及时反映民间金融交易活跃度和交易价格。该指数样板数据主要采集于四个方面：由温州市设立的几百家企业测报点，把各自借入的民间资本利率通过各地方金融办不记名申报收集起来；对各小额贷款公司借出的利率进行加权平均；融资性担保公司如典当行在融资过程中的利率，由温州经信委和商务局负责测报；民间借贷服务中心的实时利率。这些利率进行加权平均，就得出了“温州指数”。它是温州民间融资利率的风向标。2012年12月7日，温州指数正式对外发布。", "limit": "不限量，一次可取全部指标全部历史数据积分：用户需要积攒2000积分可调取，具体请参阅积分获取办法数据来源：温州指数网注：温州指数 ，即温州民间融资综合利率指数，该指数及时反映民间金融交易活跃度和交易价格。该指数样板数据主要采集于四个方面：由温州市设立的几百家企业测报点，把各自借入的民间资本利率通过各地方金融办不记名申报收集起来；对各小额贷款公司借出的利率进行加权平均；融资性担保公司如典当行在融资过程中的利率，由温州经信委和商务局负责测报；民间借贷服务中心的实时利率。这些利率进行加权平均，就得出了“温州指数”。它是温州民间融资利率的风向标。2012年12月7日，温州指数正式对外发布。", "desc": "温州民间借贷利率，即温州指数限量：不限量，一次可取全部指标全部历史数据积分：用户需要积攒2000积分可调取，具体请参阅积分获取办法数据来源：温州指数网注：温州指数 ，即温州民间融资综合利率指数，该指数及时反映民间金融交易活跃度和交易价格。该指数样板数据主要采集于四个方面：由温州市设立的几百家企业测报点，把各自借入的民间资本利率通过各地方金融办不记名申报收集起来；对各小额贷款公司借出的利率进行加权平均；融资性担保公司如典当行在融资过程中的利率，由温州经信委和商务局负责测报；民间借贷服务中心的实时利率。这些利率进行加权平均，就得出了“温州指数”。它是温州民间融资利率的风向标。2012年12月7日，温州指数正式对外发布。", "points": 2000, "href": "/document/2?doc_id=173", "is_separate": false}, {"id": "j1_239", "category": "宏观经济 / 国内宏观 / 利率数据", "title": "广州民间借贷利率", "interfaceName": "gz_index", "permissionText": "积分：用户需要积攒2000积分可调取，具体请参阅积分获取办法数据来源：广州民间金融街", "limit": "不限量，一次可取全部指标全部历史数据积分：用户需要积攒2000积分可调取，具体请参阅积分获取办法数据来源：广州民间金融街", "desc": "广州民间借贷利率限量：不限量，一次可取全部指标全部历史数据积分：用户需要积攒2000积分可调取，具体请参阅积分获取办法数据来源：广州民间金融街", "points": 2000, "href": "/document/2?doc_id=174", "is_separate": false}, {"id": "j1_241", "category": "宏观经济 / 国内宏观 / 国民经济", "title": "GDP数据", "interfaceName": "cn_gdp", "permissionText": "权限：用户积累600积分可以使用，具体请参阅积分获取办法", "limit": "单次最大10000，一次可以提取全部数据权限：用户积累600积分可以使用，具体请参阅积分获取办法", "desc": "获取国民经济之GDP数据限量：单次最大10000，一次可以提取全部数据权限：用户积累600积分可以使用，具体请参阅积分获取办法", "points": 600, "href": "/document/2?doc_id=227", "is_separate": false}, {"id": "j1_243", "category": "宏观经济 / 国内宏观 / 价格指数", "title": "居民消费价格指数", "interfaceName": "cn_cpi", "permissionText": "权限：用户积累600积分可以使用，具体请参阅积分获取办法", "limit": "单次最大5000行，一次可以提取全部数据权限：用户积累600积分可以使用，具体请参阅积分获取办法", "desc": "获取CPI居民消费价格数据，包括全国、城市和农村的数据限量：单次最大5000行，一次可以提取全部数据权限：用户积累600积分可以使用，具体请参阅积分获取办法", "points": 600, "href": "/document/2?doc_id=228", "is_separate": false}, {"id": "j1_244", "category": "宏观经济 / 国内宏观 / 价格指数", "title": "工业生产者出厂价格指数", "interfaceName": "cn_ppi", "permissionText": "权限：用户600积分可以使用，具体请参阅积分获取办法", "limit": "单次最大5000，一次可以提取全部数据权限：用户600积分可以使用，具体请参阅积分获取办法", "desc": "获取PPI工业生产者出厂价格指数数据限量：单次最大5000，一次可以提取全部数据权限：用户600积分可以使用，具体请参阅积分获取办法", "points": 600, "href": "/document/2?doc_id=245", "is_separate": false}, {"id": "j1_247", "category": "宏观经济 / 国内宏观 / 金融 / 货币供应量", "title": "货币供应量", "interfaceName": "cn_m", "permissionText": "权限：用户积累600积分可以使用，具体请参阅积分获取办法", "limit": "单次最大5000，一次可以提取全部数据权限：用户积累600积分可以使用，具体请参阅积分获取办法", "desc": "获取货币供应量之月度数据限量：单次最大5000，一次可以提取全部数据权限：用户积累600积分可以使用，具体请参阅积分获取办法", "points": 600, "href": "/document/2?doc_id=242", "is_separate": false}, {"id": "j1_249", "category": "宏观经济 / 国内宏观 / 金融 / 社会融资", "title": "社融数据（月度）", "interfaceName": "sf_month", "permissionText": "积分：需2000积分", "limit": "单次最大2000条数据，可循环提取积分：需2000积分", "desc": "获取月度社会融资数据限量：单次最大2000条数据，可循环提取积分：需2000积分", "points": 2000, "href": "/document/2?doc_id=310", "is_separate": false}, {"id": "j1_251", "category": "宏观经济 / 国内宏观 / 景气度", "title": "采购经理人指数", "interfaceName": "cn_pmi", "permissionText": "权限：用户积累5000积分可以使用，具体请参阅积分获取办法", "limit": "单次最大2000，一次可以提取全部数据", "desc": "采购经理人指数", "points": 5000, "href": "/document/2?doc_id=325", "is_separate": false}, {"id": "j1_254", "category": "宏观经济 / 国际宏观 / 美国利率", "title": "国债收益率曲线利率（日频）", "interfaceName": "us_tycr", "permissionText": "权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "limit": "单次最大可获取2000条数据权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "desc": "获取美国每日国债收益率曲线利率限量：单次最大可获取2000条数据权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=219", "is_separate": false}, {"id": "j1_255", "category": "宏观经济 / 国际宏观 / 美国利率", "title": "国债实际收益率曲线利率", "interfaceName": "us_trycr", "permissionText": "权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "limit": "单次最大可获取2000行数据，可循环获取权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "desc": "国债实际收益率曲线利率限量：单次最大可获取2000行数据，可循环获取权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=220", "is_separate": false}, {"id": "j1_256", "category": "宏观经济 / 国际宏观 / 美国利率", "title": "短期国债利率", "interfaceName": "us_tbr", "permissionText": "权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "limit": "单次最大可获取2000行数据，可循环获取权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "desc": "获取美国短期国债利率数据限量：单次最大可获取2000行数据，可循环获取权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=221", "is_separate": false}, {"id": "j1_257", "category": "宏观经济 / 国际宏观 / 美国利率", "title": "国债长期利率", "interfaceName": "us_tltr", "permissionText": "权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "limit": "单次最大可获取2000行数据，可循环获取权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "desc": "国债长期利率限量：单次最大可获取2000行数据，可循环获取权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=222", "is_separate": false}, {"id": "j1_258", "category": "宏观经济 / 国际宏观 / 美国利率", "title": "国债实际长期利率平均值", "interfaceName": "us_trltr", "permissionText": "权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "limit": "单次最大可获取2000行数据，可循环获取权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "desc": "国债实际长期利率平均值限量：单次最大可获取2000行数据，可循环获取权限：用户积累120积分可以使用，积分越高频次越高。具体请参阅积分获取办法", "points": 120, "href": "/document/2?doc_id=223", "is_separate": false}, {"id": "j1_260", "category": "大模型语料", "title": "国家政策法规库", "interfaceName": "npr", "permissionText": "积分：本接口需单独开权限（跟积分没关系），具体请参阅权限说明", "limit": "单次最大500条，可根据参数循环提取", "desc": "获取国家行政机关公开披露的各类法规、条例政策、批复、通知等文本数据。", "points": null, "href": "/document/2?doc_id=406", "is_separate": true}, {"id": "j1_261", "category": "大模型语料", "title": "券商研究报告", "interfaceName": "research_report", "permissionText": "权限：本接口需单独开权限（跟积分没关系），具体请参阅权限说明", "limit": "单次最大1000条，可根据日期或券商名称代码循环提取，每天总量不限制", "desc": "获取券商研究报告-个股、行业等，历史数据从20170101开始提供，增量每天两次更新", "points": null, "href": "/document/2?doc_id=415", "is_separate": true}, {"id": "j1_262", "category": "大模型语料", "title": "央行货币政策执行报告", "interfaceName": "monetary_policy", "permissionText": "积分：本接口为单独权限（跟积分没关系），具体请参阅权限对应列表", "limit": "单次最大1000条，一次可以拉取全部", "desc": "获取央行季度更新的货币政策执行报告，历史数据开始于2001年每年四篇，提供原始PDF下载链接，可用于分析过去20多年央行货币政策的动向、宏观以及金融市场的情况。", "points": null, "href": "/document/2?doc_id=465", "is_separate": true}, {"id": "j1_263", "category": "大模型语料", "title": "新闻快讯", "interfaceName": "news", "permissionText": "积分：本接口需单独开权限（跟积分没关系），具体请参阅权限说明", "limit": "单次最大1500条新闻，可根据时间参数循环提取历史积分：本接口需单独开权限（跟积分没关系），具体请参阅权限说明", "desc": "获取主流新闻网站的快讯新闻数据,提供超过6年以上历史新闻。限量：单次最大1500条新闻，可根据时间参数循环提取历史积分：本接口需单独开权限（跟积分没关系），具体请参阅权限说明", "points": null, "href": "/document/2?doc_id=143", "is_separate": true}, {"id": "j1_264", "category": "大模型语料", "title": "新闻通讯", "interfaceName": "major_news", "permissionText": "积分：本接口需单独开权限（跟积分没关系），具体请参阅权限说明", "limit": "单次最大400行记录，可循环提取保存到本地。", "desc": "获取长篇通讯信息，覆盖主要新闻资讯网站，提供超过8年历史新闻。", "points": null, "href": "/document/2?doc_id=195", "is_separate": true}, {"id": "j1_265", "category": "大模型语料", "title": "新闻联播", "interfaceName": "cctv_news", "permissionText": "积分：本接口需单独开权限（跟积分没关系），具体请参阅权限说明", "limit": "可根据日期参数循环提取，总量不限制", "desc": "获取新闻联播文字稿数据，数据开始于2017年。", "points": null, "href": "/document/2?doc_id=154", "is_separate": true}, {"id": "j1_266", "category": "大模型语料", "title": "上市公司全量公告", "interfaceName": "anns_d", "permissionText": "权限：本接口为单独权限，请参考权限说明", "limit": "单次最大2000条数，可以跟进日期循环获取全量权限：本接口为单独权限，请参考权限说明", "desc": "获取全量公告数据，提供pdf下载URL限量：单次最大2000条数，可以跟进日期循环获取全量权限：本接口为单独权限，请参考权限说明", "points": null, "href": "/document/2?doc_id=176", "is_separate": true}, {"id": "j1_267", "category": "大模型语料", "title": "上证E互动", "interfaceName": "irm_qa_sh", "permissionText": "权限：需单独开权限，请参考权限说明", "limit": "单次请求最大返回3000行数据，可根据股票代码，日期等参数循环提取全部数据", "desc": "获取上交所e互动董秘问答文本数据。上证e互动是由上海证券交易所建立、上海证券市场所有参与主体无偿使用的沟通平台,旨在引导和促进上市公司、投资者等各市场参与主体之间的信息沟通,构建集中、便捷的互动渠道。本接口数据记录了以上沟通问答的文本数据。", "points": null, "href": "/document/2?doc_id=366", "is_separate": true}, {"id": "j1_268", "category": "大模型语料", "title": "深证互动易", "interfaceName": "irm_qa_sz", "permissionText": "权限：需单独开权限，请参考权限说明", "limit": "单次请求最大返回3000行数据，可根据股票代码，日期等参数循环提取全部数据", "desc": "互动易是由深交所官方推出,供投资者与上市公司直接沟通的平台,一站式公司资讯汇集,提供第一手的互动问答、投资者关系信息、公司声音等内容。", "points": null, "href": "/document/2?doc_id=367", "is_separate": true}, {"id": "j1_269", "category": "其它", "title": "Tushare数据索引", "interfaceName": "", "permissionText": "", "limit": "", "desc": "", "points": null, "href": "/document/2?doc_id=209", "is_separate": true}];
+        
+        let currentTier = 'tier_all';
+        let searchQuery = '';
+
+        const tierDescriptions = {
+            'tier_all': { title: 'ALL 全部接口', desc: '包括所有的数据接口，按官网侧边栏分类层级展示，默认折叠，点击分类栏可展开。' },
+            'tier_1000': { title: '1000 积分及以下', desc: '包含 <= 1000 积分的数据，基础指数行情、股票基本信息、部分宏观价格指数等已解锁。' },
+            'tier_2000': { title: '2000 积分及以下', desc: '性价比核心档位！累计解锁了股票基础列表、全套三大财务报表、重要每日指标等数据。' },
+            'tier_3000': { title: '3000 积分及以下', desc: '包含 <= 3000 积分的数据，新增解锁 ST股票列表、沪深港通股票列表等。' },
+            'tier_4000': { title: '4000 积分及以下', desc: '包含 <= 4000 积分的数据。' },
+            'tier_5000': { title: '5000 积分及以下', desc: '包含 <= 5000 积分的数据，累计解锁了基金与ETF行情、股票量化因子、融资融券标的等。' },
+            'tier_6000': { title: '6000 积分及以下', desc: '包含 <= 6000 积分的数据，新增解锁个股资金流向、板块资金流向、国际主要指数等。' },
+            'tier_7000': { title: '7000 积分及以下', desc: '包含 <= 7000 积分的数据。' },
+            'tier_8000': { title: '8000 积分及以下', desc: '包含 <= 8000 积分的数据，新增解锁券商盈利预测正式权限、同花顺每日涨跌停榜单、连板天梯等打板专题。' },
+            'tier_gt_8000': { title: '> 8000 积分 (超级VIP)', desc: '累计解锁所有积分档位接口，包含超高门槛的特色分析指标。' },
+            'tier_separate': { title: '单独授权接口', desc: '独立收费或待查/积分无关接口列表。与积分门槛数量无直接关系，包含分钟行情数据、集合竞价、文本语料等独立权限。' }
+        };
+
+        const limits = {
+            'tier_1000': 1000,
+            'tier_2000': 2000,
+            'tier_3000': 3000,
+            'tier_4000': 4000,
+            'tier_5000': 5000,
+            'tier_6000': 6000,
+            'tier_7000': 7000,
+            'tier_8000': 8000,
+            'tier_gt_8000': 999999
+        };
+
+        const prevLimits = {
+            'tier_1000': 0,
+            'tier_2000': 1000,
+            'tier_3000': 2000,
+            'tier_4000': 3000,
+            'tier_5000': 4000,
+            'tier_6000': 5000,
+            'tier_7000': 6000,
+            'tier_8000': 7000,
+            'tier_gt_8000': 8000
+        };
+
+        // 100% Exactly Aligned with Official Website Sidebar Hierarchy Order
+        const officialCategoryOrder = [
+            '股票数据 / 基础数据',
+            '股票数据 / 行情数据',
+            '股票数据 / 财务数据',
+            '股票数据 / 参考数据',
+            '股票数据 / 特色数据',
+            '股票数据 / 两融及转融通',
+            '股票数据 / 资金流向数据',
+            '股票数据 / 打板专题数据',
+            'ETF专题',
+            '指数专题',
+            '公募基金',
+            '期货数据',
+            '现货数据',
+            '期权数据',
+            '债券专题',
+            '外汇数据',
+            '港股数据',
+            '美股数据',
+            '宏观经济 / 国内宏观',
+            '宏观经济 / 国内宏观 / 利率数据',
+            '宏观经济 / 国内宏观 / 国民经济',
+            '宏观经济 / 国内宏观 / 价格指数',
+            '宏观经济 / 国内宏观 / 金融 / 货币供应量',
+            '宏观经济 / 国内宏观 / 金融 / 社会融资',
+            '宏观经济 / 国内宏观 / 景气度',
+            '宏观经济 / 国际宏观 / 美国利率',
+            '大模型语料'
+        ];
+
+        function getCategorySortKey(catName) {
+            let idx = officialCategoryOrder.indexOf(catName);
+            if (idx === -1) idx = 999;
+            return idx;
+        }
+
+        function selectTier(tierId, cardElement) {
+            currentTier = tierId;
+            const cards = document.querySelectorAll('#tabs-grid .stat-card');
+            cards.forEach(c => c.classList.remove('active'));
+            cardElement.classList.add('active');
+            
+            document.getElementById('current-tier-title').innerText = tierDescriptions[tierId].title;
+            document.getElementById('current-tier-desc').innerText = tierDescriptions[tierId].desc;
+            
+            renderTable();
+        }
+
+        function handleSearch() {
+            searchQuery = document.getElementById('search-input').value.toLowerCase().trim();
+            renderTable();
+        }
+
+        function getItemsForTier(tierId) {
+            if (tierId === 'tier_all') {
+                return rawExpandedItems;
+            }
+            if (tierId === 'tier_separate') {
+                return rawExpandedItems.filter(item => item.is_separate);
+            }
+            
+            const limit = limits[tierId];
+            return rawExpandedItems.filter(item => item.points !== null && item.points <= limit && !item.is_separate);
+        }
+
+        function isNewInTier(item, tierId) {
+            if (tierId === 'tier_separate' || tierId === 'tier_all') {
+                return false;
+            }
+            const prevLimit = prevLimits[tierId];
+            return item.points > prevLimit;
+        }
+
+        function getPointsBadgeClass(points) {
+            if (points === null || points === undefined) return 'badge-purple-dark';
+            if (points === 0) return 'badge-green';
+            if (points <= 1000) return 'badge-green';
+            if (points <= 2000) return 'badge-blue';
+            if (points <= 5000) return 'badge-purple';
+            if (points <= 6000) return 'badge-orange';
+            return 'badge-rose';
+        }
+
+        function toggleCategory(headingEl, tableDivEl) {
+            const isCollapsed = tableDivEl.style.display === 'none';
+            const icon = headingEl.querySelector('.collapse-icon');
+            if (isCollapsed) {
+                tableDivEl.style.display = 'block';
+                headingEl.classList.add('expanded');
+                icon.innerText = '▼';
+            } else {
+                tableDivEl.style.display = 'none';
+                headingEl.classList.remove('expanded');
+                icon.innerText = '▶';
+            }
+        }
+
+        function renderTable() {
+            const tableContainer = document.getElementById('table-container');
+            tableContainer.innerHTML = '';
+            
+            const items = getItemsForTier(currentTier);
+            
+            // Filter by search query
+            const filteredItems = items.filter(item => {
+                if (!searchQuery) return true;
+                const code = (item.interfaceName || '').toLowerCase();
+                const title = (item.title || '').toLowerCase();
+                const desc = (item.desc || '').toLowerCase();
+                const cat = (item.category || '').toLowerCase();
+                return code.includes(searchQuery) || title.includes(searchQuery) || desc.includes(searchQuery) || cat.includes(searchQuery);
+            });
+            
+            if (filteredItems.length === 0) {
+                tableContainer.innerHTML = `<div class="no-data">没有找到符合条件的接口</div>`;
+                return;
+            }
+            
+            // Grouped by Category headings
+            const groups = {};
+            filteredItems.forEach(item => {
+                const cat = item.category || '未分类';
+                if (!groups[cat]) groups[cat] = [];
+                groups[cat].push(item);
+            });
+            
+            // Sort categories by officialCategoryOrder
+            const sortedCats = Object.keys(groups).sort((a, b) => {
+                return getCategorySortKey(a) - getCategorySortKey(b);
+            });
+            
+            const isSearchActive = !!searchQuery;
+            const isCumulativeTier = (currentTier !== 'tier_all' && currentTier !== 'tier_separate');
+            
+            sortedCats.forEach(cat => {
+                const catItems = groups[cat];
+                catItems.sort((a, b) => (a.interfaceName || '').localeCompare(b.interfaceName || ''));
+                
+                // Calculate new items count in this category
+                let newCount = 0;
+                if (isCumulativeTier) {
+                    newCount = catItems.filter(item => isNewInTier(item, currentTier)).length;
+                }
+                
+                const defaultDisplay = isSearchActive ? 'block' : 'none';
+                const defaultIcon = isSearchActive ? '▼' : '▶';
+                const headingClass = isSearchActive ? 'cat-group-heading expanded' : 'cat-group-heading';
+                
+                const catHeader = document.createElement('div');
+                catHeader.className = headingClass;
+                
+                let newCountBadge = '';
+                if (isCumulativeTier && newCount > 0) {
+                    newCountBadge = `<span class="new-count-badge">新增 ${newCount} 个</span>`;
+                }
+                
+                catHeader.innerHTML = `
+                    <span>${cat}</span>
+                    <div class="cat-group-right">
+                        ${newCountBadge}
+                        <span class="cat-group-count">${catItems.length} 个接口</span>
+                        <span class="collapse-icon">${defaultIcon}</span>
+                    </div>
+                `;
+                
+                const tableDiv = document.createElement('div');
+                tableDiv.className = 'table-responsive';
+                tableDiv.style.display = defaultDisplay;
+                
+                catHeader.addEventListener('click', () => {
+                    toggleCategory(catHeader, tableDiv);
+                });
+                
+                const table = document.createElement('table');
+                table.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th style="width: 14%;">接口代码</th>
+                            <th style="width: 22%;">数据名称</th>
+                            <th style="width: 12%;">积分门槛</th>
+                            <th style="width: 24%;">权限与限流说明</th>
+                            <th style="width: 23%;">描述</th>
+                            <th style="width: 5%;">文档</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                `;
+                const tbody = table.querySelector('tbody');
+                
+                catItems.forEach(item => {
+                    const code = item.interfaceName || '-';
+                    const title = item.title || '-';
+                    
+                    let pointsStr = '-';
+                    if (item.points !== null) {
+                        pointsStr = item.points === 0 ? '免费' : `${item.points} 积分`;
+                    } else {
+                        pointsStr = item.is_separate ? '单独授权' : '待查';
+                    }
+                    
+                    const pointsClass = getPointsBadgeClass(item.points);
+                    const isNew = isCumulativeTier && isNewInTier(item, currentTier);
+                    
+                    let limitAndPerm = item.permissionText || '-';
+                    if (item.limit && item.limit !== '-' && !limitAndPerm.includes(item.limit)) {
+                        limitAndPerm += `<div class="limit-text"><strong>限量:</strong> ${item.limit}</div>`;
+                    }
+                    
+                    const desc = item.desc || '-';
+                    const href = item.href ? `https://tushare.pro${item.href}` : '';
+                    const docBtn = href ? `<a href="${href}" target="_blank" class="link-btn">文档 ↗</a>` : '-';
+                    
+                    const tr = document.createElement('tr');
+                    if (isNew) {
+                        tr.classList.add('new-row');
+                    }
+                    
+                    const newTag = isNew ? `<span class="new-badge">新增</span>` : '';
+                    
+                    tr.innerHTML = `
+                        <td><span class="code-tag">${code}</span></td>
+                        <td>
+                            <span class="title-name">${title}</span>
+                            ${newTag}
+                        </td>
+                        <td><span class="points-badge ${pointsClass}">${pointsStr}</span></td>
+                        <td style="font-size: 0.8rem; line-height: 1.4;">${limitAndPerm}</td>
+                        <td style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">${desc}</td>
+                        <td>${docBtn}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                
+                tableDiv.appendChild(table);
+                tableContainer.appendChild(catHeader);
+                tableContainer.appendChild(tableDiv);
+            });
+        }
+
+        // Initial render
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTable();
+        });
+    </script>
+</body>
+</html>
